@@ -1,0 +1,132 @@
+#!/bin/bash
+#
+# 1.0.1 Notes:
+# add naviseccli -np option to reduce exec time
+#
+readonly VERSION="1.0.1"
+readonly PROGNAME=$(basename $0)
+readonly PROGDIR=$(dirname $0)
+readonly ARGS="$@"
+readonly ARGN="$#"
+
+# please change the naviseccli file localtion
+# and add naviseccli user security first (zabbix user)
+# naviseccli -AddUserSecurity -user xxxx -password xxxxx -scope 0
+readonly NAVISECCLI="/opt/Navisphere/bin/naviseccli -secfilepath /home/zabbix"
+
+parse() {
+    if [ 0 -eq $ARGN ]; then
+        usage
+        exit
+    fi
+
+    while getopts ":h:d" opt; do
+        case "$opt" in
+        "h")
+            usage
+            exit
+        ;;
+
+        *)
+            echo "Invalid option: -$OPTARG"
+            usage
+            exit
+        ;;
+        esac
+    done
+}
+
+usage() {
+cat << EOF
+
+    version: $VERSION
+    usage:
+    $PROGNAME hostname io            -- discovery I/O Module: SP_Module
+    $PROGNAME hostname lcc           -- discovery LCC: Bus_Enclosure_SP
+    $PROGNAME hostname fan           -- discovery FAN: Bus_Enclosure_SP
+    $PROGNAME hostname spepower      -- discovery SPE Power: A0 B0 A1 B1
+    $PROGNAME hostname encpower      -- discovery Enclosure Power: Bus_Enclosure_SP
+    $PROGNAME hostname disk          -- discovery Disk: Bus_Enclosure_Disk
+
+EOF
+}
+
+print() {
+    local COLNAME="$1"
+    shift
+    local DATA_LIST="$@"
+    local FIRST_LINE=1
+    local i
+
+    echo "{\"data\":["
+    for i in $DATA_LIST; do
+        if [ 1 -ne $FIRST_LINE ]; then
+            echo ","
+        fi
+
+        FIRST_LINE=0
+        echo  "{\"{#$COLNAME}\":\"$i\"}"
+    done
+    echo "]}"
+}
+
+discovery() {
+    local HOSTNAME="$1"
+    local ITEMNAME="$2"
+
+    case "$ITEMNAME" in
+    "io")
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+                        | grep "I/O Module.*State:.[^E].*" \
+                        | sed 's/.*SP \([AB]\) I\/O Module \(.\) State.*/\1_\2/g')
+        print "IONAME" "$LIST"
+    ;;
+
+    "lcc")
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+                        | grep "LCC.*State:.*" \
+                        | sed 's/Bus \(\w*\) Enclosure \(\w*\) LCC \([AB]\) State.*/\1_\2_\3/g')
+        print "LCCNAME" "$LIST"
+    ;;
+
+    "fan")
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+                        | grep "Fan.*State:.*" \
+                        | sed 's/Bus \(\w*\) Enclosure \(\w*\) Fan \([AB]\) State.*/\1_\2_\3/g')
+        print "FANNAME" "$LIST"
+    ;;
+
+    "spepower")
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+                        | grep "SPE Power.*State:.*" \
+                        | sed 's/.*Power \([AB][01]\) State.*/\1/g')
+        print "POWERNAME" "$LIST"
+    ;;
+
+    "encpower")
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+                        | grep "Bus.*Enclosure.*Power.*State:.*" \
+                        | sed 's/Bus \(\w*\) Enclosure \(\w*\) Power \([AB]\) State.*/\1_\2_\3/g')
+        print "POWERNAME" "$LIST"
+    ;;
+
+    "disk")
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getdisk -state \
+                        | grep "Disk" \
+                        | sed 's/Bus \(\w*\) Enclosure \(\w*\)[ ]*Disk \(\w*\)/\1_\2_\3/g')
+        print "DISKNAME" "$LIST"
+    ;;
+
+    *)
+        echo "ZBX_NOTSUPPORTED"
+        exit 1
+    ;;
+    esac
+}
+
+main() {
+    parse $ARGS
+    discovery $ARGS
+}
+
+main

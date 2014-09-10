@@ -1,0 +1,302 @@
+#!/bin/bash
+#
+# 1.0.1 Notes:
+# add naviseccli -np option to reduce exec time
+# fix io check check bug
+# 
+readonly VERSION="1.0.1"
+readonly PROGNAME=$(basename $0)
+readonly PROGDIR=$(dirname $0)
+readonly ARGS="$@"
+readonly ARGN="$#"
+
+# please change the naviseccli file localtion
+# and add naviseccli user security first (zabbix user)
+# naviseccli -AddUserSecurity -user xxxx -password xxxxx -scope 0
+readonly NAVISECCLI="/opt/Navisphere/bin/naviseccli -secfilepath /home/zabbix"
+
+parse() {
+    if [ 0 -eq $ARGN ]; then
+        usage
+        exit
+    fi
+
+    while getopts ":h" opt; do
+        case "$opt" in
+        "h")
+            usage
+            exit
+        ;;
+
+        *)
+            echo "Invalid option: -$OPTARG"
+            usage
+            exit
+        ;;
+        esac
+    done
+}
+
+usage() {
+cat << EOF
+
+    version: $VERSION
+    usage:
+        $PROGNAME hostname spa              -- state of SP A
+        $PROGNAME hostname spb              -- state of SP B
+        $PROGNAME hostname cpua             -- state of the CPU module on SP A
+        $PROGNAME hostname cpub             -- state of the CPU module on SP B
+        $PROGNAME hostname dimma            -- state of the DIMM module on SP A
+        $PROGNAME hostname dimmb            -- state of the DIMM module on SP B
+        $PROGNAME hostname spsa             -- state of SPS A
+        $PROGNAME hostname spsb             -- state of SPS B
+        $PROGNAME hostname cablingspsa      -- status of cabling on SPS A
+        $PROGNAME hostname cablingspsb      -- status of cabling on SPS B
+        $PROGNAME hostname io id            -- status of I/O Module: SP_Module
+        $PROGNAME hostname lcc id           -- status of LCC: Bus_Enclosure_SP
+        $PROGNAME hostname fan id           -- status of FAN: Bus_Enclosure_SP
+        $PROGNAME hostname spepower id      -- status of SPE Power: A0 B0 A1 B1
+        $PROGNAME hostname encpower id      -- status of Enclosure Power: Bus_Enclosure_SP
+        $PROGNAME hostname disk id          -- status of Disk: Bus_Enclosure_Disk
+
+EOF
+}
+
+valid_comm() {
+    local STATE="$1"
+
+    if [ -z "$STATE" ]; then
+        echo "ZBX_NOTSUPPORTED"
+        exit 1
+    fi
+
+    if [[ "Present" = "$STATE" \
+        || "Valid" = "$STATE" ]]; then
+        echo 1
+    else
+        echo 0
+    fi
+}
+
+valid_disk() {
+    local STATE="$1"
+
+    if [ -z "$STATE" ]; then
+        echo "ZBX_NOTSUPPORTED"
+        exit 1
+    fi
+
+    if [[ "Binding" = "$STATE" \
+            || "Enabled" = "$STATE"
+            || "Expanding" = "$STATE"
+            || "Formatting" = "$STATE"
+            || "Powering Up" = "$STATE"
+            || "Ready" = "$STATE"
+            || "Full Power" = "$STATE"
+            || "Low Power" = "$STATE"
+            || "Reduced Power, Transitioning" = "$STATE"
+            || "Hot Spare Ready" = "$STATE"
+            || "Unbound" = "$STATE"
+            || "Unformatted" = "$STATE" ]]; then
+        echo 1
+    else
+        echo 0
+    fi
+}
+
+check() {
+    local HOSTNAME="$1"
+    local ITEMNAME="$2"
+    local ITEMPARM="$3"
+
+    case "$ITEMNAME" in
+    "spa")
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -spa \
+                        | grep "SP A State" \
+                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+
+        valid_comm "$STATE"
+    ;;
+
+    "spb")
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -spb \
+                        | grep "SP B State" \
+                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+
+        valid_comm "$STATE"
+    ;;
+
+    "cpua")
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -cpua \
+                        | grep "CPU Module A State" \
+                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+
+        valid_comm "$STATE"
+    ;;
+
+    "cpub")
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -cpub \
+                        | grep "CPU Module B State" \
+                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+
+        valid_comm "$STATE"
+    ;;
+
+    "dimma")
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -dimma \
+                        | grep "DIMM Module A State" \
+                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+
+        valid_comm "$STATE"
+    ;;
+
+    "dimmb")
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -dimmb \
+                        | grep "DIMM Module B State" \
+                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+
+        valid_comm "$STATE"
+    ;;
+
+    "spsa")
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -spsa \
+                        | grep "SPS A State" \
+                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+
+        valid_comm "$STATE"
+    ;;
+
+    "spsb")
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -spsb \
+                        | grep "SPS B State" \
+                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+
+        valid_comm "$STATE"
+    ;;
+
+    "cablingspsa")
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -cablingspsa \
+                        | grep "SPS A Cabling State" \
+                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+
+        valid_comm "$STATE"
+    ;;
+
+    "cablingspsb")
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -cablingspsb \
+                        | grep "SPS B Cabling State" \
+                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+
+        valid_comm "$STATE"
+    ;;
+
+    "io")
+        local SP=$(echo "$ITEMPARM" | awk -F_ '{print $1}')
+        local MODULE=$(echo "$ITEMPARM" | awk -F_ '{print $2}')
+
+        if [ -z "$SP" ] || [ -z "$MODULE" ]; then
+            echo "ZBX_NOTSUPPORTED"
+            exit 1
+        fi
+
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+                        | grep "SP $SP I/O Module $MODULE State" \
+                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+
+        valid_comm "$STATE"
+    ;;
+
+    "lcc")
+        local BUS=$(echo "$ITEMPARM" | awk -F_ '{print $1}')
+        local ENCL=$(echo "$ITEMPARM" | awk -F_ '{print $2}')
+        local SP=$(echo "$ITEMPARM" | awk -F_ '{print $3}')
+
+        if [ -z "$BUS" ] || [ -z "$ENCL" ] || [ -z "$SP" ]; then
+            echo "ZBX_NOTSUPPORTED"
+            exit 1
+        fi
+
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+                        | grep "Bus $BUS Enclosure $ENCL LCC $SP State" \
+                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+
+        valid_comm "$STATE"
+    ;;
+
+    "fan")
+        local BUS=$(echo "$ITEMPARM" | awk -F_ '{print $1}')
+        local ENCL=$(echo "$ITEMPARM" | awk -F_ '{print $2}')
+        local SP=$(echo "$ITEMPARM" | awk -F_ '{print $3}')
+
+        if [ -z "$BUS" ] || [ -z "$ENCL" ] || [ -z "$SP" ]; then
+            echo "ZBX_NOTSUPPORTED"
+            exit 1
+        fi
+
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+                        | grep "Bus $BUS Enclosure $ENCL Fan $SP State" \
+                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+
+        valid_comm "$STATE"
+    ;;
+
+    "spepower")
+        local SPE="$ITEMPARM"
+
+        if [ -z "$SPE" ]; then
+            echo "ZBX_NOTSUPPORTED"
+            exit 1
+        fi
+
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+                        | grep "SPE Power $SPE State" \
+                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+
+        valid_comm "$STATE"
+    ;;
+
+    "encpower")
+        local BUS=$(echo "$ITEMPARM" | awk -F_ '{print $1}')
+        local ENCL=$(echo "$ITEMPARM" | awk -F_ '{print $2}')
+        local SP=$(echo "$ITEMPARM" | awk -F_ '{print $3}')
+
+        if [ -z "$BUS" ] || [ -z "$ENCL" ] || [ -z "$SP" ]; then
+            echo "ZBX_NOTSUPPORTED"
+            exit 1
+        fi
+
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+                        | grep "Bus $BUS Enclosure $ENCL Power $SP State" \
+                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+
+        valid_comm "$STATE"
+    ;;
+
+    "disk")
+        local DISK="$ITEMPARM"
+
+        if [ -z "$DISK" ]; then
+            echo "ZBX_NOTSUPPORTED"
+            exit 1
+        fi
+
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getdisk "$DISK" -state \
+                        | grep "State" \
+                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+
+        valid_disk "$STATE"
+    ;;
+
+    *)
+        echo "ZBX_NOTSUPPORTED"
+        exit 1
+    ;;
+    esac
+}
+
+main() {
+    parse $ARGS
+    check $ARGS
+}
+
+main
