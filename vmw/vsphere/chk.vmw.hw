@@ -1,6 +1,9 @@
-#!/usr/bin/python
+#!/usr/local/python/bin/python
 # -*- coding: UTF-8 -*-
-
+#
+# 1.0.1 Notes:
+# change python running path
+#
 import sys
 import time
 from optparse import OptionParser
@@ -9,7 +12,7 @@ import json
 import re
 import socket
 
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 ZBX_ERROR = 'ZBX_NOTSUPPORTED'
 verbose = False
 
