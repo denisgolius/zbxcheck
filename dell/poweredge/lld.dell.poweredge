@@ -1,0 +1,100 @@
+#!/usr/local/python/bin/python
+# -*- coding: UTF-8 -*-
+
+import sys
+from optparse import OptionParser
+import snmplib
+
+VERSION = '1.0.0'
+verbose = False
+
+RULES = {
+    # processorDeviceStatusLocationName
+    "cpu":   (".1.3.6.1.4.1.674.10892.1.1100.32.1.7",
+    # processorDeviceStatusStateSettings
+              [(".1.3.6.1.4.1.674.10892.1.1100.32.1.4",
+               lambda x: x != '1')]),
+    # memoryDeviceLocationName
+    "mem":   (".1.3.6.1.4.1.674.10892.1.1100.50.1.8",
+    # memoryDeviceStateSettings
+              [(".1.3.6.1.4.1.674.10892.1.1100.50.1.4",
+               lambda x: x != '1')]),
+    # powerSupplyLocationName
+    "ps":    (".1.3.6.1.4.1.674.10892.1.600.12.1.8",
+    # powerSupplyStateSettingsUnique
+              [(".1.3.6.1.4.1.674.10892.1.600.12.1.4",
+               lambda x: x != '1')]),
+    # batteryLocationName
+    "bat":   (".1.3.6.1.4.1.674.10892.1.600.50.1.7",
+    # batteryStateSettings
+              [(".1.3.6.1.4.1.674.10892.1.600.50.1.4",
+               lambda x: x != '1')]),
+    # coolingDeviceLocationName
+    "fan":   (".1.3.6.1.4.1.674.10892.1.700.12.1.8",
+    # coolingDeviceStateSettings
+              [(".1.3.6.1.4.1.674.10892.1.700.12.1.4",
+               lambda x: x != '1')]),
+    # temperatureProbeLocationName
+    "temp":  (".1.3.6.1.4.1.674.10892.1.700.20.1.8",
+    # temperatureProbeStateSettings
+              [(".1.3.6.1.4.1.674.10892.1.700.20.1.4",
+               lambda x: x != '1')]),
+    # controllerName
+    "raid":  (".1.3.6.1.4.1.674.10893.1.20.130.1.1.2",
+    # controllerState
+              [(".1.3.6.1.4.1.674.10893.1.20.130.1.1.5",
+               lambda x: x != '0')]),
+    # virtualDiskName
+    "vdisk": (".1.3.6.1.4.1.674.10893.1.20.140.1.1.2",
+    # virtualDiskState
+              [(".1.3.6.1.4.1.674.10893.1.20.140.1.1.4",
+               lambda x: x != '0')]),
+    # arrayDiskName
+    "pdisk": (".1.3.6.1.4.1.674.10893.1.20.130.4.1.2",
+    # arrayDiskState
+              [(".1.3.6.1.4.1.674.10893.1.20.130.4.1.4",
+               lambda x: x != '0')])
+}
+
+
+def opt_parse():
+    global verbose
+    usage = '''
+    %prog hostname/ip community component [-v]
+
+    component:
+        cpu     -- CPU
+        mem     -- Memory
+        ps      -- PowerSupply
+        bat     -- Battery
+        fan     -- Fan
+        temp    -- Temperature Sensor
+        raid    -- Array Controller
+        vdisk   -- Virtual Disk
+        pdisk   -- Physical Drive
+    '''
+
+    parser = OptionParser(usage=usage, version=VERSION)
+    parser.add_option('-v', '--verbose', action='store_true',
+                      dest='verbose', default=False,
+                      help='print verbose infomation')
+    (options, args) = parser.parse_args()
+    # setting verbose
+    verbose = options.verbose
+    snmplib.verbose = verbose
+
+    if len(args) < 3:
+        print 'too few parameters.\n'
+        parser.print_help()
+        sys.exit(-1)
+    elif args[2] not in RULES.keys():
+        print 'component is invalidate.\n'
+        parser.print_help()
+        sys.exit(-1)
+    else:
+        return args
+
+if __name__ == '__main__':
+    args = opt_parse()
+    items = snmplib.lld_process(args[0], args[1], RULES[args[2]])
+    print snmplib.lld_format(items)
