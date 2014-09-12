@@ -134,13 +134,14 @@ def get_opt():
     %prog -g hostname user password cname ename devid [-v]
 
     component include:
-        cpu     --CPU
-        mem     --Memory
-        fan     --Fan
-        ps      --PowerSupply
-        temp    --Temperature Sensor
-        raid    --RAID Controller
-        disk    --Physical Disk'''
+        cpu     -- CPU
+        mem     -- Memory
+        fan     -- Fan
+        ps      -- PowerSupply
+        temp    -- Temperature Sensor
+        raid    -- RAID Controller
+        disk    -- Physical Disk
+    '''
 
     parser = OptionParser(usage=usage, version=VERSION)
     parser.add_option('-d', '--discover', action='store_true',
