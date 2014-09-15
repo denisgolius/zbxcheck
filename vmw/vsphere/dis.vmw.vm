@@ -6,6 +6,7 @@ from optparse import OptionParser
 from pysphere import VIServer
 
 VERSION = '1.0.0'
+TIMEOUT = 10
 
 
 def host_print(server):
@@ -79,7 +80,6 @@ def vm_print(server):
 
 
 def opt_parse():
-    global verbose
     usage = '''
     %prog host user passwd
 
@@ -89,11 +89,7 @@ def opt_parse():
     '''
 
     parser = OptionParser(usage=usage, version=VERSION)
-    parser.add_option('-v', '--verbose', action='store_true',
-                      dest='verbose', default=False,
-                      help='print verbose infomation')
     (options, args) = parser.parse_args()
-    verbose = options.verbose
 
     if len(args) < 3:
         print 'too few parameters.\n'
@@ -103,19 +99,19 @@ def opt_parse():
         return args
 
 if __name__ == '__main__':
-    args = opt_parse()
-
+    host, user, passwd = opt_parse()
     server = VIServer()
+
     try:
-        server.connect(args[0], args[1], args[2])
+        server.connect(host, user, passwd, sock_timeout=TIMEOUT)
     except Exception as e:
-        print "connection to %s failed: %s" % (args[0], e)
+        print "connect to %s error: %s" % (host, e)
         sys.exit(-1)
 
-    host_print(server)
-    vm_print(server)
-
     try:
+        host_print(server)
+        vm_print(server)
+    except Exception as e:
+        print "process to %s error: %s" % (host, e)
+    finally:
         server.disconnect()
-    except Exception as e:
-        sys.exit(-1)
