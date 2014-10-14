@@ -132,13 +132,6 @@ CHK_ITEM = {
           from v$system_event se,v$event_name en
          where se.event(+) = en.name
            and en.name = \'log file parallel write\''''),
-    'enqueue': (
-        'general',
-        '''
-        select nvl(time_waited,0)
-          from v$system_event se,v$event_name en
-         where se.event(+) = en.name
-           and en.name = \'enqueue\''''),
     'dbseqtread': (
         'general',
         '''
@@ -196,7 +189,7 @@ CHK_ITEM = {
     'dfree': (
         'general',
         '''
-        select sum(bytes)
+        select nvl(sum(bytes),0)
           from dba_free_space'''),
     'ttotal': (
         'general',
@@ -229,7 +222,7 @@ CHK_ITEM = {
     'dtsfree': (
         'tablespace',
         '''
-        select sum(bytes)
+        select nvl(sum(bytes),0)
           from dba_free_space
          where tablespace_name = upper(:dtsname)'''),
     'ttsstatus': (
@@ -271,7 +264,7 @@ CHK_ITEM = {
     'dffree': (
         'dbfile',
         '''
-        select sum(bytes)
+        select nvl(sum(bytes),0)
           from dba_free_space
          where file_id = :fileid'''),
     'tfstatus': (
@@ -384,7 +377,6 @@ def opt_parse():
         logswcompletion    -- log file switch completion
         logfilesync        -- log file sync
         logprllwrite       -- log file parallel write
-        enqueue            -- enqueue waits
         dbseqtread         -- db file sequential read
         dbscatread         -- db file scattered read
         dbsnglwrite        -- db file single write
