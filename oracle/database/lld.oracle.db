@@ -1,0 +1,136 @@
+#!/usr/local/python/bin/python
+# -*- coding: UTF-8 -*-
+
+import sys
+import time
+import json
+import traceback
+from optparse import OptionParser
+import cx_Oracle
+
+
+VERSION = '1.0.0'
+ERROR = 'ZBX_NOTSUPPORTED'
+parser = False
+verbose = False
+
+# Please create user and grant privileges in each database.
+# Ref: db_user.sql for detail.
+USERNAME = 'raidmirror'  # oracle username
+PASSWORD = 'raidmirror'  # oralce password
+
+LLD_SQL = {
+    'dts': '''
+        select a.ts#, a.name
+          from v$tablespace a, dba_tablespaces b
+         where a.name = b.tablespace_name
+           and b.contents in (\'PERMANENT\', \'UNDO\')''',
+    'tts': '''
+        select a.ts#, a.name
+          from v$tablespace a, dba_tablespaces b
+         where a.name = b.tablespace_name
+           and b.contents = \'TEMPORARY\'''',
+    'df': '''
+        select file_id, file_name
+          from dba_data_files''',
+    'tf': '''
+        select file_id, file_name
+          from dba_temp_files''',
+    'dg': '''
+        select group_number, name
+          from v$asm_diskgroup''',
+    'dk': '''
+        select group_number || '_' || disk_number, path
+        from v$asm_disk'''
+}
+
+
+def log(message):
+    if verbose:
+        print '%s %s' % (time.strftime('%Y%m%d %H:%M:%S'), message)
+
+
+def cmd_error(message):
+    print ERROR
+    print message
+    parser.print_help()
+    sys.exit(-1)
+
+
+def proc_error():
+    print ERROR
+    sys.exit(-1)
+
+
+def opt_parse():
+    global verbose
+    global parser
+    usage = '''
+    %prog hostname port sid component [-v]
+
+    component:
+        dts    -- data tablespaces
+        tts    -- temp tablespaces
+        df     -- data files
+        tf     -- temp files
+        dg     -- disk groups
+        dk     -- disks
+    '''
+
+    parser = OptionParser(usage=usage, version=VERSION)
+    parser.add_option('-v', '--verbose', action='store_true',
+                      dest='verbose', default=False,
+                      help='print verbose infomation')
+    (options, args) = parser.parse_args()
+    verbose = options.verbose
+
+    if len(args) < 4:
+        cmd_error('too few parameters.\n')
+    elif args[3] not in LLD_SQL.keys():
+        cmd_error('component is invalidate.\n')
+    else:
+        return args
+
+
+def lld_format(items):
+    result = {}
+    result['data'] = items
+    if verbose:
+        return json.dumps(result, encoding='utf-8', indent=4)
+    else:
+        return json.dumps(result, encoding='utf-8')
+
+
+def lld_process(hostname, port, sid, component):
+    items = []
+
+    dsn = cx_Oracle.makedsn(hostname, port, sid)
+    log('using dns: %s' % dsn)
+
+    conn = cx_Oracle.connect(USERNAME, PASSWORD, dsn)
+    log('connect to %s success.' % sid)
+
+    cursor = conn.cursor()
+    cursor.execute(LLD_SQL[component])
+    log('execute sql success.')
+
+    for row in cursor:
+        item = {}
+        item['{#INDEX}'] = row[0]
+        item['{#NAME}'] = row[1]
+        items.append(item)
+        log('get item: %s' % item)
+
+    cursor.close()
+    conn.close()
+
+    return items
+
+if __name__ == '__main__':
+    try:
+        args = opt_parse()
+        items = lld_process(*args)
+        print lld_format(items)
+    except Exception:
+        log(traceback.format_exc())
+        proc_error()
