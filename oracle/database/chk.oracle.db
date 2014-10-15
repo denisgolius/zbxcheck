@@ -255,18 +255,6 @@ CHK_ITEM = {
         select status
           from v$datafile
          where file# = :fileid'''),
-    'dftotal': (
-        'dbfile',
-        '''
-        select bytes
-          from dba_data_files
-         where file_id = :fileid'''),
-    'dffree': (
-        'dbfile',
-        '''
-        select nvl(sum(bytes),0)
-          from dba_free_space
-         where file_id = :fileid'''),
     'tfstatus': (
         'dbfile',
         '''
@@ -395,8 +383,6 @@ def opt_parse():
         ttstotal  name     -- total bytes of each temp tablespace
         ttsfree   name     -- free bytes of each temp tablespace
         dfstatus  id       -- status of each data file
-        dftotal   id       -- total bytes of each data file
-        dffree    id       -- free bytes of each data file
         tfstatus  id       -- status of each temp file
         dgstatus  name     -- status of each asm disk group
         dgtotal   name     -- total Mbytps of each asm disk group
