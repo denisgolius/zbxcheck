@@ -1,0 +1,147 @@
+#!/usr/local/python/bin/python
+# -*- coding: UTF-8 -*-
+#
+# 1.0.2 Notes:
+# split lld function from chk.vmw.hw
+#
+import sys
+import time
+import json
+import re
+import traceback
+from optparse import OptionParser
+import pywbem
+import socket
+
+VERSION = '1.0.2'
+ERROR = 'ZBX_NOTSUPPORTED'
+verbose = False
+parser = None
+
+# wbem default namespace
+NAMESPACE = 'root/cimv2'
+
+LLD_CLASS = {
+    # component name: (wbem classes...)
+    'cpu':  ('CIM_Processor',),
+    'mem':  ('CIM_Memory',),
+    'fan':  ('CIM_Fan',),
+    'ps':   ('CIM_PowerSupply',),
+    'temp': ('CIM_NumericSensor',),
+    'raid': ('VMware_Controller',),
+    'disk': ('VMware_StorageExtent', 'OMC_DiscreteSensor')
+}
+
+# please increase Timeout=15 in zabbix_server.conf
+TIMEOUT = 10
+socket.setdefaulttimeout(TIMEOUT)
+
+
+def log(message):
+    if verbose:
+        print '%s %s' % (time.strftime('%Y%m%d %H:%M:%S'), message)
+
+
+def cmd_error(message):
+    print ERROR
+    print message
+    parser.print_help()
+    sys.exit(1)
+
+
+def proc_error():
+    log(traceback.format_exc())
+    print ERROR
+    sys.exit(1)
+
+
+def lld_format(items):
+    result = {}
+    result['data'] = items
+    if verbose:
+        return json.dumps(result, encoding='utf-8', indent=4)
+    else:
+        return json.dumps(result, encoding='utf-8')
+
+
+def lld_process(hostname, username, password, compname):
+    items = []
+
+    conn = pywbem.WBEMConnection(
+        'https://' + hostname, (username, password), NAMESPACE)
+
+    for cname in LLD_CLASS[compname]:
+        log('scan class: %s' % cname)
+
+        instances = conn.EnumerateInstances(cname)
+        for i in instances:
+            log('scan for instance: %s' % i)
+
+            # skip items which HealthState is null or unknown
+            if i['HealthState'] is None and i['HealthState'] != 0:
+                continue
+            elif cname == 'CIM_Memory' and i['Name'] != 'System Memory':
+                continue
+            elif cname == 'CIM_NumericSensor' and i['SensorType'] != 2:
+                continue
+            elif cname == 'OMC_DiscreteSensor' and not (
+                i['IpmiSensorType'] == 13 and
+                    re.search(r'(Drive Fault)|(Predictive Failure)',
+                              i['ElementName'])):
+                continue
+
+            item = {}
+            item['{#CNAME}'] = i['CreationClassName']
+            item['{#ENAME}'] = i['ElementName']
+            if 'DeviceID' in i.keys():
+                item['{#DEVID}'] = i['DeviceID']
+            else:
+                item['{#DEVID}'] = ''
+            items.append(item)
+            log('get item: %s' % item)
+
+        # if get items, stop scan other class
+        if len(items) > 0:
+            break
+    return items
+
+
+def opt_parse():
+    global verbose
+    global parser
+
+    usage = '''
+    %prog hostname username password component [-v]
+
+    component:
+        cpu     -- CPU
+        mem     -- Memory
+        ps      -- PowerSupply
+        fan     -- Fan
+        temp    -- Temperature Sensor
+        raid    -- Array Controller
+        disk    -- Physical Drive
+    '''
+
+    parser = OptionParser(usage=usage, version=VERSION)
+    parser.add_option('-v', '--verbose', action='store_true',
+                      dest='verbose', default=False,
+                      help='print verbose infomation')
+    (options, args) = parser.parse_args()
+    verbose = options.verbose
+
+    if len(args) < 4:
+        cmd_error('too few parameters.\n')
+    elif args[3] not in LLD_CLASS.keys():
+        cmd_error('component is invalidate.\n')
+    else:
+        return args
+
+
+if __name__ == '__main__':
+    try:
+        args = opt_parse()
+        items = lld_process(*args)
+        print lld_format(items)
+    except Exception:
+        proc_error()

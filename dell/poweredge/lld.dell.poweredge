@@ -1,66 +1,85 @@
 #!/usr/local/python/bin/python
 # -*- coding: UTF-8 -*-
-
+#
+# 1.0.1 Notes:
+# distinguish between empty result and exception
+#
 import sys
+import traceback
 from optparse import OptionParser
 import snmplib
 
-VERSION = '1.0.0'
-verbose = False
+VERSION = '1.0.1'
+ERROR = 'ZBX_NOTSUPPORTED'
+parser = None
 
 RULES = {
     # processorDeviceStatusLocationName
-    "cpu":   (".1.3.6.1.4.1.674.10892.1.1100.32.1.7",
+    'cpu':   ('.1.3.6.1.4.1.674.10892.1.1100.32.1.7',
     # processorDeviceStatusStateSettings
-              [(".1.3.6.1.4.1.674.10892.1.1100.32.1.4",
+              [('.1.3.6.1.4.1.674.10892.1.1100.32.1.4',
                lambda x: x != '1')]),
     # memoryDeviceLocationName
-    "mem":   (".1.3.6.1.4.1.674.10892.1.1100.50.1.8",
+    'mem':   ('.1.3.6.1.4.1.674.10892.1.1100.50.1.8',
     # memoryDeviceStateSettings
-              [(".1.3.6.1.4.1.674.10892.1.1100.50.1.4",
+              [('.1.3.6.1.4.1.674.10892.1.1100.50.1.4',
                lambda x: x != '1')]),
     # powerSupplyLocationName
-    "ps":    (".1.3.6.1.4.1.674.10892.1.600.12.1.8",
+    'ps':    ('.1.3.6.1.4.1.674.10892.1.600.12.1.8',
     # powerSupplyStateSettingsUnique
-              [(".1.3.6.1.4.1.674.10892.1.600.12.1.4",
+              [('.1.3.6.1.4.1.674.10892.1.600.12.1.4',
                lambda x: x != '1')]),
     # batteryLocationName
-    "bat":   (".1.3.6.1.4.1.674.10892.1.600.50.1.7",
+    'bat':   ('.1.3.6.1.4.1.674.10892.1.600.50.1.7',
     # batteryStateSettings
-              [(".1.3.6.1.4.1.674.10892.1.600.50.1.4",
+              [('.1.3.6.1.4.1.674.10892.1.600.50.1.4',
                lambda x: x != '1')]),
     # coolingDeviceLocationName
-    "fan":   (".1.3.6.1.4.1.674.10892.1.700.12.1.8",
+    'fan':   ('.1.3.6.1.4.1.674.10892.1.700.12.1.8',
     # coolingDeviceStateSettings
-              [(".1.3.6.1.4.1.674.10892.1.700.12.1.4",
+              [('.1.3.6.1.4.1.674.10892.1.700.12.1.4',
                lambda x: x != '1')]),
     # temperatureProbeLocationName
-    "temp":  (".1.3.6.1.4.1.674.10892.1.700.20.1.8",
+    'temp':  ('.1.3.6.1.4.1.674.10892.1.700.20.1.8',
     # temperatureProbeStateSettings
-              [(".1.3.6.1.4.1.674.10892.1.700.20.1.4",
+              [('.1.3.6.1.4.1.674.10892.1.700.20.1.4',
                lambda x: x != '1')]),
     # controllerName
-    "raid":  (".1.3.6.1.4.1.674.10893.1.20.130.1.1.2",
+    'raid':  ('.1.3.6.1.4.1.674.10893.1.20.130.1.1.2',
     # controllerState
-              [(".1.3.6.1.4.1.674.10893.1.20.130.1.1.5",
+              [('.1.3.6.1.4.1.674.10893.1.20.130.1.1.5',
                lambda x: x != '0')]),
     # virtualDiskName
-    "vdisk": (".1.3.6.1.4.1.674.10893.1.20.140.1.1.2",
+    'vdisk': ('.1.3.6.1.4.1.674.10893.1.20.140.1.1.2',
     # virtualDiskState
-              [(".1.3.6.1.4.1.674.10893.1.20.140.1.1.4",
+              [('.1.3.6.1.4.1.674.10893.1.20.140.1.1.4',
                lambda x: x != '0')]),
     # arrayDiskName
-    "pdisk": (".1.3.6.1.4.1.674.10893.1.20.130.4.1.2",
+    'pdisk': ('.1.3.6.1.4.1.674.10893.1.20.130.4.1.2',
     # arrayDiskState
-              [(".1.3.6.1.4.1.674.10893.1.20.130.4.1.4",
+              [('.1.3.6.1.4.1.674.10893.1.20.130.4.1.4',
                lambda x: x != '0')])
 }
 
 
+def cmd_error(message):
+    print ERROR
+    print message
+    parser.print_help()
+    sys.exit(1)
+
+
+def proc_error():
+    snmplib.log(traceback.format_exc())
+    print ERROR
+    sys.exit(1)
+
+
 def opt_parse():
-    global verbose
+    global parser
+
     usage = '''
-    %prog hostname/ip community component [-v]
+    %prog hostname community component [-v]
 
     component:
         cpu     -- CPU
@@ -80,21 +99,19 @@ def opt_parse():
                       help='print verbose infomation')
     (options, args) = parser.parse_args()
     # setting verbose
-    verbose = options.verbose
-    snmplib.verbose = verbose
+    snmplib.verbose = options.verbose
 
     if len(args) < 3:
-        print 'too few parameters.\n'
-        parser.print_help()
-        sys.exit(-1)
+        cmd_error('too few parameters.\n')
     elif args[2] not in RULES.keys():
-        print 'component is invalidate.\n'
-        parser.print_help()
-        sys.exit(-1)
+        cmd_error('component is invalidate.\n')
     else:
         return args
 
 if __name__ == '__main__':
-    args = opt_parse()
-    items = snmplib.lld_process(args[0], args[1], RULES[args[2]])
-    print snmplib.lld_format(items)
+    try:
+        args = opt_parse()
+        items = snmplib.lld_process(args[0], args[1], RULES[args[2]])
+        print snmplib.lld_format(items)
+    except Exception:
+        proc_error()

@@ -1,15 +1,20 @@
 #!/usr/local/python/bin/python
 # -*- coding: UTF-8 -*-
 #
+# 2.0.1 Notes:
+# distinguish between empty result and exception
+#
 # 2.0.0 Notes:
 # change from bash to python
 #
 import sys
+import traceback
 from optparse import OptionParser
 import snmplib
 
-VERSION = '2.0.0'
-verbose = False
+VERSION = '2.0.1'
+ERROR = 'ZBX_NOTSUPPORTED'
+parser = None
 
 # .1.3.6.1.2.1.2.2.1.2 ifDescr
 # .1.3.6.1.2.1.2.2.1.8 ifOperStatus
@@ -17,14 +22,28 @@ verbose = False
 # This rule:
 #    filter all operation up(1) interfaces
 #    return index and description of these interfaces
-RULE = (".1.3.6.1.2.1.2.2.1.2",
-        [(".1.3.6.1.2.1.2.2.1.8",
+RULE = ('.1.3.6.1.2.1.2.2.1.2',
+        [('.1.3.6.1.2.1.2.2.1.8',
          lambda x: x == '1')])
 
 
+def cmd_error(message):
+    print ERROR
+    print message
+    parser.print_help()
+    sys.exit(1)
+
+
+def proc_error():
+    snmplib.log(traceback.format_exc())
+    print ERROR
+    sys.exit(1)
+
+
 def opt_parse():
-    global verbose
-    usage = "%prog hostname/ip community [-v]"
+    global parser
+
+    usage = '%prog hostname community [-v]'
 
     parser = OptionParser(usage=usage, version=VERSION)
     parser.add_option('-v', '--verbose', action='store_true',
@@ -32,17 +51,17 @@ def opt_parse():
                       help='print verbose infomation')
     (options, args) = parser.parse_args()
     # setting verbose
-    verbose = options.verbose
-    snmplib.verbose = verbose
+    snmplib.verbose = options.verbose
 
     if len(args) < 2:
-        print 'too few parameters.\n'
-        parser.print_help()
-        sys.exit(-1)
+        cmd_error('too few parameters.\n')
     else:
         return args
 
 if __name__ == '__main__':
-    args = opt_parse()
-    items = snmplib.lld_process(args[0], args[1], RULE)
-    print snmplib.lld_format(items)
+    try:
+        args = opt_parse()
+        items = snmplib.lld_process(args[0], args[1], RULE)
+        print snmplib.lld_format(items)
+    except Exception:
+        proc_error()

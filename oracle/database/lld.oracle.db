@@ -8,10 +8,9 @@ import traceback
 from optparse import OptionParser
 import cx_Oracle
 
-
 VERSION = '1.0.0'
 ERROR = 'ZBX_NOTSUPPORTED'
-parser = False
+parser = None
 verbose = False
 
 # Please create user and grant privileges in each database.
@@ -20,6 +19,7 @@ USERNAME = 'raidmirror'  # oracle username
 PASSWORD = 'raidmirror'  # oralce password
 
 LLD_SQL = {
+    # component name: lld sql
     'dts': '''
         select a.ts#, a.name
           from v$tablespace a, dba_tablespaces b
@@ -54,17 +54,19 @@ def cmd_error(message):
     print ERROR
     print message
     parser.print_help()
-    sys.exit(-1)
+    sys.exit(1)
 
 
 def proc_error():
+    log(traceback.format_exc())
     print ERROR
-    sys.exit(-1)
+    sys.exit(1)
 
 
 def opt_parse():
     global verbose
     global parser
+
     usage = '''
     %prog hostname port sid component [-v]
 
@@ -132,5 +134,4 @@ if __name__ == '__main__':
         items = lld_process(*args)
         print lld_format(items)
     except Exception:
-        log(traceback.format_exc())
         proc_error()
