@@ -1,5 +1,8 @@
 # -*- coding: UTF-8 -*-
 #
+# 1.0.2 Notes:
+# fix utf-8 encoding bug
+#
 # 1.0.1 Notes:
 # reraise all exceptions to caller
 #
@@ -8,10 +11,10 @@ import json
 import netsnmp
 
 # Please install NET-SNMP python Extension Module
-# Ref doc:
-# https://net-snmp.svn.sourceforge.net/svnroot/net-snmp/trunk/net-snmp/python/README
+# README doc:
+# https://net-snmp.svn.sourceforge.net/svnroot/net-snmp/trunk/net-snmp/python/
 
-VERSION = '1.0.1'
+VERSION = '1.0.2'
 verbose = False
 
 
@@ -55,9 +58,9 @@ def lld_format(items):
     result = {}
     result['data'] = items
     if verbose:
-        return json.dumps(result, encoding='utf-8', indent=4)
+        return json.dumps(result, ensure_ascii=False, indent=4)
     else:
-        return json.dumps(result, encoding='utf-8')
+        return json.dumps(result, ensure_ascii=False)
 
 
 def lld_process(hostname, community, rule):
@@ -89,14 +92,15 @@ def lld_process(hostname, community, rule):
         items = snmp_query(hostname, community, oid, condition)
         filter_oid_items_lists.append(items)
 
-    for index in origin_oid_items.keys():
+    for (index, value) in origin_oid_items.iteritems():
         for items in filter_oid_items_lists:
             if index not in items.keys():
                 break
         else:
             item = {}
             item['{#SNMPINDEX}'] = index
-            item['{#SNMPVALUE}'] = origin_oid_items[index]
+            # chardet is not good, using fixed encoding for chinese
+            item['{#SNMPVALUE}'] = value.decode('gb2312').encode('utf-8')
             result.append(item)
 
     return result

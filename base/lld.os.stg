@@ -1,39 +1,32 @@
 #!/usr/local/python/bin/python
 # -*- coding: UTF-8 -*-
-#
-# 2.0.2 Notes:
-# filter all ethernetCsmacd and gigabitEthernet interface
-#
-# 2.0.1 Notes:
-# distinguish between empty result and exception
-#
-# 2.0.0 Notes:
-# change from bash to python
-#
+
 import sys
 import traceback
 from optparse import OptionParser
 import snmplib
 
-VERSION = '2.0.2'
+VERSION = '1.0.0'
 ERROR = 'ZBX_NOTSUPPORTED'
 parser = None
 
-# .1.3.6.1.2.1.2.2.1.2 ifDescr
-# .1.3.6.1.2.1.2.2.1.8 ifOperStatus
-# .1.3.6.1.2.1.2.2.1.3 ifType
-#
-# This rule:
-#    filter all interfaces with:
-#        ifOperStatus up(1)
-#        ifType       ethernetCsmacd(6)
-#        ifType       gigabitEthernet(117)
-#    return index and description of these interfaces
-RULE = ('.1.3.6.1.2.1.2.2.1.2',
-        [('.1.3.6.1.2.1.2.2.1.8',
-         lambda x: x == '1'),
-         ('.1.3.6.1.2.1.2.2.1.3',
-         lambda x: x in ('6', '117'))])
+RULES = {
+    # hrStorageDescr
+    'mem':  ('.1.3.6.1.2.1.25.2.3.1.3',
+    # hrStorageType == hrStorageRam
+             [('.1.3.6.1.2.1.25.2.3.1.2',
+              lambda x: x[-1] == '2')]),
+    # hrStorageDescr
+    'swap': ('.1.3.6.1.2.1.25.2.3.1.3',
+    # hrStorageType == hrStorageVirtualMemory
+             [('.1.3.6.1.2.1.25.2.3.1.2',
+              lambda x: x[-1] == '3')]),
+    # hrStorageDescr
+    'fs':   ('.1.3.6.1.2.1.25.2.3.1.3',
+    # hrStorageType == hrStorageFixedDisk
+             [('.1.3.6.1.2.1.25.2.3.1.2',
+             lambda x: x[-1] == '4')])
+}
 
 
 def cmd_error(message):
@@ -52,7 +45,14 @@ def proc_error():
 def opt_parse():
     global parser
 
-    usage = '%prog hostname community [-v]'
+    usage = '''
+    %prog hostname community component [-v]
+
+    component:
+        mem    -- Memory
+        swap   -- Swap
+        fs     -- File System
+    '''
 
     parser = OptionParser(usage=usage, version=VERSION)
     parser.add_option('-v', '--verbose', action='store_true',
@@ -62,15 +62,17 @@ def opt_parse():
     # setting verbose
     snmplib.verbose = options.verbose
 
-    if len(args) < 2:
+    if len(args) < 3:
         cmd_error('too few parameters.\n')
+    elif args[2] not in RULES.keys():
+        cmd_error('component is invalidate.\n')
     else:
         return args
 
 if __name__ == '__main__':
     try:
         args = opt_parse()
-        items = snmplib.lld_process(args[0], args[1], RULE)
+        items = snmplib.lld_process(args[0], args[1], RULES[args[2]])
         print snmplib.lld_format(items)
     except Exception:
         proc_error()
