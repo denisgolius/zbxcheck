@@ -1,6 +1,9 @@
 #!/usr/local/python/bin/python
 # -*- coding: UTF-8 -*-
 #
+# 1.0.2 Notes:
+# add array battery lld
+#
 # 1.0.1 Notes:
 # distinguish between empty result and exception
 #
@@ -49,6 +52,11 @@ RULES = {
     # controllerState
               [('.1.3.6.1.4.1.674.10893.1.20.130.1.1.5',
                lambda x: x != '0')]),
+    # batteryName
+    'rbat':  ('.1.3.6.1.4.1.674.10893.1.20.130.15.1.2',
+    # batteryState
+              [('.1.3.6.1.4.1.674.10893.1.20.130.15.1.4',
+               lambda x: x != '0')]),
     # virtualDiskName
     'vdisk': ('.1.3.6.1.4.1.674.10893.1.20.140.1.1.2',
     # virtualDiskState
@@ -89,6 +97,7 @@ def opt_parse():
         fan     -- Fan
         temp    -- Temperature Sensor
         raid    -- Array Controller
+        rbat    -- Array Controller Battery
         vdisk   -- Virtual Disk
         pdisk   -- Physical Drive
     '''
