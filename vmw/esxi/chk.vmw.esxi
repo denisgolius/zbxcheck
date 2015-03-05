@@ -1,0 +1,97 @@
+#!/usr/local/python/bin/python
+# -*- coding: UTF-8 -*-
+#
+# 1.0.2 Notes:
+# split chk function from chk.vmw.hw
+#
+import sys
+import time
+import traceback
+from optparse import OptionParser
+import pywbem
+import socket
+
+VERSION = '1.0.2'
+ERROR = 'ZBX_NOTSUPPORTED'
+verbose = False
+parser = None
+
+# wbem default namespcae
+NAMESPACE = 'root/cimv2'
+
+# please increase Timeout=15 in zabbix_server.conf
+TIMEOUT = 10
+socket.setdefaulttimeout(TIMEOUT)
+
+
+def log(message):
+    if verbose:
+        print '%s %s' % (time.strftime('%Y%m%d %H:%M:%S'), message)
+
+
+def cmd_error(message):
+    print ERROR
+    print message
+    parser.print_help()
+    sys.exit(1)
+
+
+def proc_error():
+    log(traceback.format_exc())
+    print ERROR
+    sys.exit(1)
+
+
+# comp is dedicate for zabbix key distinguish
+def chk_process(hostname, username, password, cname, ename, devid, comp=None):
+
+    conn = pywbem.WBEMConnection(
+        'https://' + hostname, (username, password), NAMESPACE)
+
+    if devid == '':
+        log('scan element: %s' % ename)
+        instances = conn.EnumerateInstances(cname)
+        for instance in instances:
+            log('scan for instance: %s' % instance)
+            if instance['ElementName'] == ename:
+                return instance['HealthState']
+    else:
+        log('scan device: %s' % devid)
+        names = conn.EnumerateInstanceNames(cname)
+        for name in names:
+            log('scan for instance name: %s' % name)
+            if name['DeviceID'] == devid:
+                instance = conn.GetInstance(name)
+                return instance['HealthState']
+    log('no matching instance')
+    print ERROR
+    sys.exit(1)
+
+
+def opt_parse():
+    global verbose
+    global parser
+
+    usage = '''
+    %prog hostname username password cname ename devid [-v]
+    '''
+
+    parser = OptionParser(usage=usage, version=VERSION)
+    parser.add_option('-v', '--verbose', action='store_true',
+                      dest='verbose', default=False,
+                      help='print verbose infomation')
+    (options, args) = parser.parse_args()
+    verbose = options.verbose
+
+    if len(args) < 6:
+        cmd_error('too few parameters.\n')
+    else:
+        return args
+
+
+if __name__ == '__main__':
+    try:
+        args = opt_parse()
+        print chk_process(*args)
+    except Exception:
+        proc_error()

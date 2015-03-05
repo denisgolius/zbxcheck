@@ -1,0 +1,468 @@
+#!/usr/local/python/bin/python
+# -*- coding: UTF-8 -*-
+
+import sys
+import time
+import json
+import re
+import traceback
+from optparse import OptionParser
+import cx_Oracle
+
+VERSION = '1.0.0'
+ERROR = 'ZBX_NOTSUPPORTED'
+verbose = False
+parser = None
+
+# Please create user and grant privileges in each database.
+# Ref: db_user.sql for detail.
+USERNAME = 'raidmirror'  # oracle username
+PASSWORD = 'raidmirror'  # oralce password
+
+CHK_ITEM = {
+    'status': (
+        'general',
+        '''
+        select  case when count(*) > 0 then 1 else 0 end
+          from v$instance
+         where status = \'OPEN\'
+           and logins = \'ALLOWED\'
+           and database_status = \'ACTIVE\''''),
+    'users': (
+        'general',
+        '''
+        select count(*)-1
+          from v$session
+         where username is not null'''),
+    'ausers': (
+        'general',
+        '''
+        select count(*)-1
+          from v$session
+         where username is not null
+           and status=\'ACTIVE\''''),
+    'commits': (
+        'general',
+        '''
+        select value
+          from v$sysstat
+         where name = \'user commits\''''),
+    'rollbacks': (
+        'general',
+        '''
+        select value
+          from v$sysstat
+         where name = \'user rollbacks\''''),
+    'deadlocks': (
+        'general',
+        '''
+        select value
+          from v$sysstat
+         where name = \'enqueue deadlocks\''''),
+    'phardparse': (
+        'general',
+        '''
+        select h.value/t.value*100
+          from v$sysstat h, v$sysstat t
+         where h.name = \'parse count (hard)\'
+           and t.name = \'parse count (total)\''''),
+    'pdisksort': (
+        'general',
+        '''
+        select (1-h.value/(h.value+t.value))*100
+          from v$sysstat h, v$sysstat t
+         where h.name = \'sorts (memory)\'
+           and t.name = \'sorts (disk)\''''),
+    'redowrites': (
+        'general',
+        '''
+        select value
+          from v$sysstat
+         where name = \'redo writes\''''),
+    'tablongscan': (
+        'general',
+        '''
+        select value
+          from v$sysstat
+         where name = \'table scans (long tables)\''''),
+    'tabrowsscan': (
+        'general',
+        '''
+        select value
+          from v$sysstat
+         where name = \'table scan rows gotten\''''),
+    'indexffs': (
+        'general',
+        '''
+        select value
+          from v$sysstat
+         where name = \'index fast full scans (full)\''''),
+    'freebufwaits': (
+        'general',
+        '''
+        select nvl(time_waited,0)
+          from v$system_event se,v$event_name en
+         where se.event(+) = en.name
+           and en.name = \'free buffer waits\''''),
+    'bufbusywaits': (
+        'general',
+        '''
+        select nvl(time_waited,0)
+          from v$system_event se,v$event_name en
+         where se.event(+) = en.name
+           and en.name = \'buffer busy waits\''''),
+    'logswcompletion': (
+        'general',
+        '''
+        select nvl(time_waited,0)
+          from v$system_event se,v$event_name en
+         where se.event(+) = en.name
+           and en.name = \'log file switch completion\''''),
+    'logfilesync': (
+        'general',
+        '''
+        select nvl(time_waited,0)
+          from v$system_event se,v$event_name en
+         where se.event(+) = en.name
+           and en.name = \'log file sync\''''),
+    'logprllwrite': (
+        'general',
+        '''
+        select nvl(time_waited,0)
+          from v$system_event se,v$event_name en
+         where se.event(+) = en.name
+           and en.name = \'log file parallel write\''''),
+    'dbseqtread': (
+        'general',
+        '''
+        select nvl(time_waited,0)
+          from v$system_event se,v$event_name en
+         where se.event(+) = en.name
+           and en.name = \'db file sequential read\''''),
+    'dbscatread': (
+        'general',
+        '''
+        select nvl(time_waited,0)
+          from v$system_event se,v$event_name en
+         where se.event(+) = en.name
+           and en.name = \'db file scattered read\''''),
+    'dbsnglwrite': (
+        'general',
+        '''
+        select nvl(time_waited,0)
+          from v$system_event se,v$event_name en
+         where se.event(+) = en.name
+           and en.name = \'db file single write\''''),
+    'dbprllwrite': (
+        'general',
+        '''
+        select nvl(time_waited,0)
+          from v$system_event se,v$event_name en
+         where se.event(+) = en.name
+           and en.name = \'db file parallel write\''''),
+    'directread': (
+        'general',
+        '''
+        select nvl(time_waited,0)
+          from v$system_event se,v$event_name en
+         where se.event(+) = en.name
+           and en.name = \'direct path read\''''),
+    'directwrite': (
+        'general',
+        '''
+        select nvl(time_waited,0)
+          from v$system_event se,v$event_name en
+         where se.event(+) = en.name
+           and en.name = \'direct path write\''''),
+    'latchfree': (
+        'general',
+        '''
+        select nvl(time_waited,0)
+          from v$system_event se,v$event_name en
+         where se.event(+) = en.name
+           and en.name = \'latch free\''''),
+    'dtotal': (
+        'general',
+        '''
+        select sum(bytes)
+          from dba_data_files'''),
+    'dfree': (
+        'general',
+        '''
+        select nvl(sum(bytes),0)
+          from dba_free_space'''),
+    'ttotal': (
+        'general',
+        '''
+        select sum(bytes)
+          from dba_temp_files'''),
+    'tfree': (
+        'general',
+        '''
+        select sum(t.block_size * a.free_blocks)
+          from dba_tablespaces t,(
+               select f.tablespace_name,
+                      sum(f.blocks) - nvl(sum(s.used_blocks),0) free_blocks
+               from dba_temp_files f, v$sort_segment s
+               where f.tablespace_name = s.tablespace_name(+)
+               group by f.tablespace_name) a
+         where t.tablespace_name = a.tablespace_name'''),
+    'dtsstatus': (
+        'tablespace',
+        '''
+        select status
+          from dba_tablespaces
+         where tablespace_name = upper(:dtsname)'''),
+    'dtstotal': (
+        'tablespace',
+        '''
+        select sum(bytes)
+          from dba_data_files
+         where tablespace_name = upper(:dtsname)'''),
+    'dtsfree': (
+        'tablespace',
+        '''
+        select nvl(sum(bytes),0)
+          from dba_free_space
+         where tablespace_name = upper(:dtsname)'''),
+    'ttsstatus': (
+        'tablespace',
+        '''
+        select status
+          from dba_tablespaces
+         where tablespace_name = upper(:ttsname)'''),
+    'ttstotal': (
+        'tablespace',
+        '''
+        select sum(bytes)
+          from dba_temp_files
+         where tablespace_name = upper(:ttsname)'''),
+    'ttsfree': (
+        'tablespace',
+        '''
+        select sum(t.block_size * a.free_blocks)
+          from dba_tablespaces t,(
+               select f.tablespace_name,
+                      sum(f.blocks) - nvl(sum(s.used_blocks),0) free_blocks
+               from dba_temp_files f, v$sort_segment s
+               where f.tablespace_name = s.tablespace_name(+)
+                 and f.tablespace_name = upper(:ttsname)
+               group by f.tablespace_name) a
+         where t.tablespace_name = a.tablespace_name'''),
+    'dfstatus': (
+        'dbfile',
+        '''
+        select status
+          from v$datafile
+         where file# = :fileid'''),
+    'tfstatus': (
+        'dbfile',
+        '''
+        select status
+          from v$tempfile
+         where file# = :fileid'''),
+    'dgstatus': (
+        'asmdiskgroup',
+        '''
+        select state
+          from v$asm_diskgroup
+         where name = upper(:dgname)'''),
+    'dgtotal': (
+        'asmdiskgroup',
+        '''
+        select total_mb
+          from v$asm_diskgroup
+         where name = upper(:dgname)'''),
+    'dgfree': (
+        'asmdiskgroup',
+        '''
+        select free_mb
+          from v$asm_diskgroup
+         where name = upper(:dgname)'''),
+    'dkstatus': (
+        'asmdisk',
+        '''
+        select mount_status
+          from v$asm_disk
+         where group_number = :groupnum
+           and disk_number = :disknum'''),
+    'dktotal': (
+        'asmdisk',
+        '''
+        select total_mb
+          from v$asm_disk
+         where group_number = :groupnum
+           and disk_number = :disknum'''),
+    'dkfree': (
+        'asmdisk',
+        '''
+        select free_mb
+          from v$asm_disk
+         where group_number = :groupnum
+           and disk_number = :disknum'''),
+}
+
+TYPE_MAP = {
+    #item class: (
+    #  item params check function,
+    #  item params parse function)
+    'general': (
+        None,
+        None),
+    'tablespace': (
+        lambda params: len(params) == 1,
+        None),
+    'dbfile': (
+        lambda params: len(params) == 1 and
+        re.search(r'^\d*$', params[0]) is not None,
+        None),
+    'asmdiskgroup': (
+        lambda params: len(params) == 1,
+        None),
+    'asmdisk': (
+        lambda params: len(params) == 1 and
+        re.search(r'^\d_\d$', params[0]) is not None,
+        lambda params: params[0].split('_'))
+}
+
+
+def log(message):
+    if verbose:
+        print '%s %s' % (time.strftime('%Y%m%d %H:%M:%S'), message)
+
+
+def cmd_error(message):
+    print ERROR
+    print message
+    parser.print_help()
+    sys.exit(1)
+
+
+def proc_error():
+    log(traceback.format_exc())
+    print ERROR
+    sys.exit(1)
+
+
+def opt_parse():
+    global verbose
+    global parser
+
+    usage = '''
+    %prog hostname port sid item... [-v]
+
+    item:
+        status             -- instance status
+        users              -- connected users
+        ausers             -- active users
+        commits            -- user commits
+        rollbacks          -- user rollbacks
+        deadlocks          -- deadlocks
+        phardparse         -- hard parse ratio
+        pdisksort          -- disk sort ratio
+        redowrites         -- redo writes
+        tablongscan        -- table scans (long tables)
+        tabrowsscan        -- table scan rows gotten
+        indexffs           -- index fast full scans (full)
+        freebufwaits       -- free buffer waits
+        bufbusywaits       -- buffer busy waits
+        logswcompletion    -- log file switch completion
+        logfilesync        -- log file sync
+        logprllwrite       -- log file parallel write
+        dbseqtread         -- db file sequential read
+        dbscatread         -- db file scattered read
+        dbsnglwrite        -- db file single write
+        dbprllwrite        -- db file parallel write
+        directread         -- direct path read
+        directwrite        -- direct path write
+        latchfree          -- latch free
+        dtotal             -- total bytes of all data tablespaces
+        dfree              -- free bytes of all data tablespaces
+        ttotal             -- total bytes of all temp tablespaces
+        tfree              -- free bytes of all temp tablespaces
+        dtsstatus name     -- status of each data tablespace
+        dtstotal  name     -- total bytes of each data tablespace
+        dtsfree   name     -- free bytes of each data tablespace
+        ttsstatus name     -- status of each temp tablespace
+        ttstotal  name     -- total bytes of each temp tablespace
+        ttsfree   name     -- free bytes of each temp tablespace
+        dfstatus  id       -- status of each data file
+        tfstatus  id       -- status of each temp file
+        dgstatus  name     -- status of each asm disk group
+        dgtotal   name     -- total Mbytps of each asm disk group
+        dgfree    name     -- free Mbytps of each asm disk group
+        dkstatus  id       -- status of each asm disk
+                           -- id format: DISKGROUPNUM_DISKNUM
+        dktotal   id       -- total Mbytps of each asm disk
+                           -- id format: DISKGROUPNUM_DISKNUM
+        dkfree    id       -- free Mbytps of each asm disk
+                           -- id format: DISKGROUPNUM_DISKNUM
+    '''
+
+    parser = OptionParser(usage=usage, version=VERSION)
+    parser.add_option('-v', '--verbose', action='store_true',
+                      dest='verbose', default=False,
+                      help='print verbose infomation')
+    (options, args) = parser.parse_args()
+    verbose = options.verbose
+
+    if len(args) < 4:
+        cmd_error('too few parameters.\n')
+    elif args[3] not in CHK_ITEM.keys():
+        cmd_error('item is invalidate.\n')
+    else:
+        return args
+
+
+def chk_process(hostname, port, sid, item, params):
+    (item_type, item_sql) = CHK_ITEM[item]
+
+    check_func = TYPE_MAP[item_type][0]
+    if check_func is not None and not check_func(params):
+        cmd_error('item\'s parameters are invalidate: %s\n' % params)
+
+    parse_func = TYPE_MAP[item_type][1]
+    item_params = params
+    if parse_func is not None:
+        item_params = parse_func(params)
+    log('using item parameters: %s' % item_params)
+
+    dsn = cx_Oracle.makedsn(hostname, port, sid)
+    log('using dns: %s' % dsn)
+
+    try:
+        conn = cx_Oracle.connect(USERNAME, PASSWORD, dsn)
+        log('connect to %s success.' % sid)
+
+        cursor = conn.cursor()
+        cursor.execute(item_sql, item_params)
+        log('execute sql success.')
+
+        row = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        # if no row retrieved :
+        # normal sql will return None
+        # aggregate sql will return (None,)
+        if row is None or row[0] is None:
+            log('no row retrieved.')
+            proc_error()
+        else:
+            return row[0]
+    except Exception:
+        # ensure instance status check always feedback
+        if item == 'status':
+            log('can not get instance status, set to error.')
+            log(traceback.format_exc())
+            return 0
+        else:
+            raise
+
+if __name__ == '__main__':
+    try:
+        args = opt_parse()
+        print chk_process(args[0], args[1], args[2], args[3], args[4:])
+    except Exception:
+        proc_error()
