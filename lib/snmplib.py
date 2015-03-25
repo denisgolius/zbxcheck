@@ -1,5 +1,8 @@
 # -*- coding: UTF-8 -*-
 #
+# 1.0.3 Notes:
+# add snmp version option: v1 v2, not support v3
+#
 # 1.0.2 Notes:
 # fix utf-8 encoding bug
 #
@@ -14,7 +17,7 @@ import netsnmp
 # README doc:
 # https://net-snmp.svn.sourceforge.net/svnroot/net-snmp/trunk/net-snmp/python/
 
-VERSION = '1.0.2'
+VERSION = '1.0.3'
 verbose = False
 
 
@@ -23,15 +26,15 @@ def log(message):
         print '%s %s' % (time.strftime('%Y%m%d %H:%M:%S'), message)
 
 
-def snmp_query(desthost, community, oid, condition=None):
+def snmp_query(hostname, community, version, oid, condition=None):
     vbind = netsnmp.Varbind(oid)
     vlist = netsnmp.VarList()
     vlist.append(vbind)
 
     netsnmp.snmpwalk(
         vlist,
-        Version=2,
-        DestHost=desthost,
+        Version=version,
+        DestHost=hostname,
         Community=community,
         UseNumeric=1)
     log('oid %s have %d items before filter.' % (oid, len(vlist)))
@@ -63,7 +66,7 @@ def lld_format(items):
         return json.dumps(result, ensure_ascii=False)
 
 
-def lld_process(hostname, community, rule):
+def lld_process(hostname, community, version, rule):
     result = []
     # rule format:
     #    (origin_oid, [(filter_oid, filter_func)...])
@@ -82,14 +85,14 @@ def lld_process(hostname, community, rule):
     #    )
     origin_oid, filter_oids = rule
 
-    origin_oid_items = snmp_query(hostname, community, origin_oid)
+    origin_oid_items = snmp_query(hostname, community, version, origin_oid)
     if not origin_oid_items:
         log('origin oid %s is empty, lld finish.' % origin_oid)
         return result
 
     filter_oid_items_lists = []
     for oid, condition in filter_oids:
-        items = snmp_query(hostname, community, oid, condition)
+        items = snmp_query(hostname, community, version, oid, condition)
         filter_oid_items_lists.append(items)
 
     for (index, value) in origin_oid_items.iteritems():
