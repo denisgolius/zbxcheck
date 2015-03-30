@@ -1,0 +1,117 @@
+#!/bin/bash
+
+readonly VERSION="1.0.0"
+readonly PROGNAME=$(basename $0)
+readonly PROGDIR=$(dirname $0)
+readonly ARGS="$@"
+readonly ARGN="$#"
+
+# please make sure SMcli is installed in path: /opt/IBM_DS/client
+readonly SMCLI="/opt/IBM_DS/jre/bin/java -Xmx16M \
+                -Ddevmgr.datadir=/var/opt/SM \
+                -Ddevmgr.dmv.featureOption=FULL_SA \
+                -DstorageManager=5 \
+                -classpath /opt/IBM_DS/client:/opt/IBM_DS/client/jhall.jar:/opt/IBM_DS/client/SMclient.jar \
+                devmgr.cli.CommandLineInterface"
+
+parse() {
+    if [ 0 -eq $ARGN ]; then
+        usage
+        exit
+    fi
+
+    while getopts ":h" opt; do
+        case "$opt" in
+        "h")
+            usage
+            exit
+        ;;
+
+        *)
+            echo "Invalid option: -$OPTARG"
+            usage
+            exit
+        ;;
+        esac
+    done
+}
+
+usage() {
+cat << EOF
+
+    version: $VERSION
+    usage:
+        $PROGNAME hostname spa              -- status of Controller A
+        $PROGNAME hostname spb              -- status of Controller B
+        $PROGNAME hostname disk id          -- status of Disk: Enclosure_Slot
+
+EOF
+}
+
+valid() {
+    local STATE="$1"
+
+    if [ -z "$STATE" ]; then
+        echo "ZBX_NOTSUPPORTED"
+        exit 1
+    fi
+
+    if [[ "Online" = "$STATE" \
+        || "Optimal" = "$STATE" ]]; then
+        echo 1
+    else
+        echo 0
+    fi
+}
+
+check() {
+    local HOSTNAME="$1"
+    local ITEMNAME="$2"
+    local ITEMPARM="$3"
+
+    case "$ITEMNAME" in
+    "spa")
+        local STATE=$($SMCLI "$HOSTNAME" -e -S -c "show controller [a] summary;" \
+                        | sed -n "/Controller in Enclosure/,/Status/ {/Status/p}" \
+                        | awk '{print $2}')
+
+        valid "$STATE"
+    ;;
+
+    "spb")
+        local STATE=$($SMCLI "$HOSTNAME" -e -S -c "show controller [b] summary;" \
+                        | sed -n "/Controller in Enclosure/,/Status/ {/Status/p}" \
+                        | awk '{print $2}')
+
+        valid "$STATE"
+    ;;
+
+    "disk")
+        local ENCLOSURE=$(echo "$ITEMPARM" | awk -F_ '{print $1}')
+        local SLOT=$(echo "$ITEMPARM" | awk -F_ '{print $2}')
+
+        if [ -z "$ENCLOSURE" ] || [ -z "$SLOT" ]; then
+            echo "ZBX_NOTSUPPORTED"
+            exit 1
+        fi
+
+        local STATE=$($SMCLI "$HOSTNAME" -e -S -c "show Drive [${ENCLOSURE}, ${SLOT}] summary;" \
+                        | sed -n "/ENCLOSURE, SLOT  STATUS/,/^$/ {s/\([0-9][0-9]*\), \([0-9][0-9]*\)/\1_\2/gp}" \
+                        | awk '{print $2}')
+
+        valid "$STATE"
+    ;;
+
+    *)
+        echo "ZBX_NOTSUPPORTED"
+        exit 1
+    ;;
+    esac
+}
+
+main() {
+    parse $ARGS
+    check $ARGS
+}
+
+main

@@ -1,0 +1,92 @@
+#!/bin/bash
+
+readonly VERSION="1.0.0"
+readonly PROGNAME=$(basename $0)
+readonly PROGDIR=$(dirname $0)
+readonly ARGS="$@"
+readonly ARGN="$#"
+
+# please make sure SMcli is installed in path: /opt/IBM_DS/client
+readonly SMCLI="/opt/IBM_DS/jre/bin/java -Xmx16M \
+                -Ddevmgr.datadir=/var/opt/SM \
+                -Ddevmgr.dmv.featureOption=FULL_SA \
+                -DstorageManager=5 \
+                -classpath /opt/IBM_DS/client:/opt/IBM_DS/client/jhall.jar:/opt/IBM_DS/client/SMclient.jar \
+                devmgr.cli.CommandLineInterface"
+
+parse() {
+    if [ 0 -eq $ARGN ]; then
+        usage
+        exit
+    fi
+
+    while getopts ":h" opt; do
+        case "$opt" in
+        "h")
+            usage
+            exit
+        ;;
+
+        *)
+            echo "Invalid option: -$OPTARG"
+            usage
+            exit
+        ;;
+        esac
+    done
+}
+
+usage() {
+cat << EOF
+
+    version: $VERSION
+    usage:
+    $PROGNAME hostname disk          -- discovery Disk: Enclosure_Slot
+
+EOF
+}
+
+print() {
+    local COLNAME="$1"
+    shift
+    local DATA_LIST="$@"
+    local FIRST_LINE=1
+    local i
+
+    echo "{\"data\":["
+    for i in $DATA_LIST; do
+        if [ 1 -ne $FIRST_LINE ]; then
+            echo ","
+        fi
+
+        FIRST_LINE=0
+        echo  "{\"{#$COLNAME}\":\"$i\"}"
+    done
+    echo "]}"
+}
+
+discovery() {
+    local HOSTNAME="$1"
+    local ITEMNAME="$2"
+
+    case "$ITEMNAME" in
+    "disk")
+        local LIST=$($SMCLI "$HOSTNAME" -e -S -c "show allDrives summary;" \
+                        | sed -n "/ENCLOSURE, SLOT  STATUS/,/^$/ {s/\([0-9][0-9]*\), \([0-9][0-9]*\)/\1_\2/gp}" \
+                        | awk '{print $1}')
+        print "DISKNAME" "$LIST"
+    ;;
+
+    *)
+        echo "ZBX_NOTSUPPORTED"
+        exit 1
+    ;;
+    esac
+}
+
+main() {
+    parse $ARGS
+    discovery $ARGS
+}
+
+main
