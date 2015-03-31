@@ -1,10 +1,13 @@
 #!/bin/bash
 #
+# 1.0.2 Notes:
+# tuning filter(grep, sed, awk) expression
+#
 # 1.0.1 Notes:
 # add naviseccli -np option to reduce exec time
 # fix io check check bug
 # 
-readonly VERSION="1.0.1"
+readonly VERSION="1.0.2"
 readonly PROGNAME=$(basename $0)
 readonly PROGDIR=$(dirname $0)
 readonly ARGS="$@"
@@ -112,81 +115,61 @@ check() {
     case "$ITEMNAME" in
     "spa")
         local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -spa \
-                        | grep "SP A State" \
-                        | sed 's/.*:[ ]*\(.*\)/\1/g')
-
+                        | sed -n "s/SP A State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
     "spb")
         local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -spb \
-                        | grep "SP B State" \
-                        | sed 's/.*:[ ]*\(.*\)/\1/g')
-
+                        | sed -n "s/SP B State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
     "cpua")
         local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -cpua \
-                        | grep "CPU Module A State" \
-                        | sed 's/.*:[ ]*\(.*\)/\1/g')
-
+                        | sed -n "s/.*CPU Module A State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
     "cpub")
         local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -cpub \
-                        | grep "CPU Module B State" \
-                        | sed 's/.*:[ ]*\(.*\)/\1/g')
-
+                        | sed -n "s/.*CPU Module B State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
     "dimma")
         local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -dimma \
-                        | grep "DIMM Module A State" \
-                        | sed 's/.*:[ ]*\(.*\)/\1/g')
-
+                        | sed -n "s/.*DIMM Module A State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
     "dimmb")
         local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -dimmb \
-                        | grep "DIMM Module B State" \
-                        | sed 's/.*:[ ]*\(.*\)/\1/g')
-
+                        | sed -n "s/.*DIMM Module B State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
     "spsa")
         local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -spsa \
-                        | grep "SPS A State" \
-                        | sed 's/.*:[ ]*\(.*\)/\1/g')
-
+                        | sed -n "s/.*SPS A State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
     "spsb")
         local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -spsb \
-                        | grep "SPS B State" \
-                        | sed 's/.*:[ ]*\(.*\)/\1/g')
-
+                        | sed -n "s/.*SPS B State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
     "cablingspsa")
         local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -cablingspsa \
-                        | grep "SPS A Cabling State" \
-                        | sed 's/.*:[ ]*\(.*\)/\1/g')
-
+                        | sed -n "s/.*SPS A Cabling State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
     "cablingspsb")
         local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -cablingspsb \
-                        | grep "SPS B Cabling State" \
-                        | sed 's/.*:[ ]*\(.*\)/\1/g')
-
+                        | sed -n "s/.*SPS B Cabling State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
@@ -200,9 +183,7 @@ check() {
         fi
 
         local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
-                        | grep "SP $SP I/O Module $MODULE State" \
-                        | sed 's/.*:[ ]*\(.*\)/\1/g')
-
+                        | sed -n "s/.*SP $SP I\/O Module $MODULE State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
@@ -217,8 +198,7 @@ check() {
         fi
 
         local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
-                        | grep "Bus $BUS Enclosure $ENCL LCC $SP State" \
-                        | sed 's/.*:[ ]*\(.*\)/\1/g')
+                        | sed -n "s/Bus $BUS Enclosure $ENCL LCC $SP State: *\([A-Za-z]*\)/\1/gp")
 
         valid_comm "$STATE"
     ;;
@@ -234,9 +214,7 @@ check() {
         fi
 
         local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
-                        | grep "Bus $BUS Enclosure $ENCL Fan $SP State" \
-                        | sed 's/.*:[ ]*\(.*\)/\1/g')
-
+                        | sed -n "s/Bus $BUS Enclosure $ENCL Fan $SP State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
@@ -249,9 +227,7 @@ check() {
         fi
 
         local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
-                        | grep "SPE Power $SPE State" \
-                        | sed 's/.*:[ ]*\(.*\)/\1/g')
-
+                        | sed -n "s/.*SPE Power $SPE State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
@@ -266,9 +242,7 @@ check() {
         fi
 
         local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
-                        | grep "Bus $BUS Enclosure $ENCL Power $SP State" \
-                        | sed 's/.*:[ ]*\(.*\)/\1/g')
-
+                        | sed -n "s/Bus $BUS Enclosure $ENCL Power $SP State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
@@ -281,9 +255,7 @@ check() {
         fi
 
         local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getdisk "$DISK" -state \
-                        | grep "State" \
-                        | sed 's/.*:[ ]*\(.*\)/\1/g')
-
+                        | sed -n "s/State: *\([A-Za-z]*\)/\1/gp")
         valid_disk "$STATE"
     ;;
 

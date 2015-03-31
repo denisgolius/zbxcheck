@@ -1,9 +1,14 @@
 #!/bin/bash
 #
+# 1.0.2 Notes:
+# fix getopts parse bug
+# fix discovery empty disks bug
+# tuning filter(grep, sed, awk) expression
+#
 # 1.0.1 Notes:
 # add naviseccli -np option to reduce exec time
 #
-readonly VERSION="1.0.1"
+readonly VERSION="1.0.2"
 readonly PROGNAME=$(basename $0)
 readonly PROGDIR=$(dirname $0)
 readonly ARGS="$@"
@@ -20,7 +25,7 @@ parse() {
         exit
     fi
 
-    while getopts ":h:d" opt; do
+    while getopts ":h" opt; do
         case "$opt" in
         "h")
             usage
@@ -77,43 +82,44 @@ discovery() {
     case "$ITEMNAME" in
     "io")
         local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
-                        | grep "I/O Module.*State:.[^E].*" \
-                        | sed 's/.*SP \([AB]\) I\/O Module \(.\) State.*/\1_\2/g')
+                        | sed -n "s/.*SP \([AB]\) I\/O Module \([0-9][0-9]*\) State:/\1_\2/gp" \
+                        | awk '$2 !~ /[Ee]mpty/ {print $1}')
         print "IONAME" "$LIST"
     ;;
 
     "lcc")
         local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
-                        | grep "LCC.*State:.*" \
-                        | sed 's/Bus \(\w*\) Enclosure \(\w*\) LCC \([AB]\) State.*/\1_\2_\3/g')
+                        | sed -n "s/Bus \([0-9][0-9]*\) Enclosure \([0-9][0-9]*\) LCC \([AB]\) State:/\1_\2_\3/gp" \
+                        | awk '{print $1}')
         print "LCCNAME" "$LIST"
     ;;
 
     "fan")
         local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
-                        | grep "Fan.*State:.*" \
-                        | sed 's/Bus \(\w*\) Enclosure \(\w*\) Fan \([AB]\) State.*/\1_\2_\3/g')
+                        | sed -n "s/Bus \([0-9][0-9]*\) Enclosure \([0-9][0-9]*\) Fan \([AB]\) State:/\1_\2_\3/gp" \
+                        | awk '{print $1}')
         print "FANNAME" "$LIST"
     ;;
 
     "spepower")
         local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
-                        | grep "SPE Power.*State:.*" \
-                        | sed 's/.*Power \([AB][01]\) State.*/\1/g')
+                        | sed -n "s/.*SPE Power \([AB][0-9][0-9]*\) State:/\1/gp" \
+                        | awk '{print $1}')
         print "POWERNAME" "$LIST"
     ;;
 
     "encpower")
         local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
-                        | grep "Bus.*Enclosure.*Power.*State:.*" \
-                        | sed 's/Bus \(\w*\) Enclosure \(\w*\) Power \([AB]\) State.*/\1_\2_\3/g')
+                        | sed -n "s/Bus \([0-9][0-9]*\) Enclosure \([0-9][0-9]*\) Power \([AB]\) State:/\1_\2_\3/gp" \
+                        | awk '{print $1}')
         print "POWERNAME" "$LIST"
     ;;
 
     "disk")
         local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getdisk -state \
-                        | grep "Disk" \
-                        | sed 's/Bus \(\w*\) Enclosure \(\w*\)[ ]*Disk \(\w*\)/\1_\2_\3/g')
+                        | grep -e "Disk" -e "State" \
+                        | sed -n "N;s/^Bus \([0-9][0-9]*\) Enclosure \([0-9][0-9]*\) *Disk \([0-9][0-9]*\)\nState:/\1_\2_\3/gp" \
+                        | awk '$2 !~ /[Ee]mpty/ {print $1}')
         print "DISKNAME" "$LIST"
     ;;
 
