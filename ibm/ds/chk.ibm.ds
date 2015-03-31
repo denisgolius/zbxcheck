@@ -74,7 +74,6 @@ check() {
         local STATE=$($SMCLI "$HOSTNAME" -e -S -c "show controller [a] summary;" \
                         | sed -n "/Controller in Enclosure/,/Status/ {/Status/p}" \
                         | awk '{print $2}')
-
         valid "$STATE"
     ;;
 
@@ -82,7 +81,6 @@ check() {
         local STATE=$($SMCLI "$HOSTNAME" -e -S -c "show controller [b] summary;" \
                         | sed -n "/Controller in Enclosure/,/Status/ {/Status/p}" \
                         | awk '{print $2}')
-
         valid "$STATE"
     ;;
 
@@ -98,7 +96,6 @@ check() {
         local STATE=$($SMCLI "$HOSTNAME" -e -S -c "show Drive [${ENCLOSURE}, ${SLOT}] summary;" \
                         | sed -n "/ENCLOSURE, SLOT  STATUS/,/^$/ {s/\([0-9][0-9]*\), \([0-9][0-9]*\)/\1_\2/gp}" \
                         | awk '{print $2}')
-
         valid "$STATE"
     ;;
 
