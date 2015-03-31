@@ -5,8 +5,8 @@
 #
 # 1.0.1 Notes:
 # add naviseccli -np option to reduce exec time
-# fix io check check bug
-# 
+# fix io check bug
+#
 readonly VERSION="1.0.2"
 readonly PROGNAME=$(basename $0)
 readonly PROGDIR=$(dirname $0)
