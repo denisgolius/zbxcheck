@@ -1,0 +1,56 @@
+#!/usr/local/python/bin/python
+# -*- coding: UTF-8 -*-
+
+import sys
+import traceback
+from optparse import OptionParser
+import snmplib
+
+VERSION = '1.0.0'
+ERROR = 'ZBX_NOTSUPPORTED'
+SNMPV = 2
+parser = None
+
+RULE = ('.1.3.6.1.3.94.1.8.1.3',
+        [('.1.3.6.1.3.94.1.8.1.4',
+         lambda x: x != '1')])
+
+
+def cmd_error(message):
+    print ERROR
+    print message
+    parser.print_help()
+    sys.exit(1)
+
+
+def proc_error():
+    snmplib.log(traceback.format_exc())
+    print ERROR
+    sys.exit(1)
+
+
+def opt_parse():
+    global parser
+
+    usage = '%prog hostname community [-v]'
+
+    parser = OptionParser(usage=usage, version=VERSION)
+    parser.add_option('-v', '--verbose', action='store_true',
+                      dest='verbose', default=False,
+                      help='print verbose infomation')
+    (options, args) = parser.parse_args()
+    # setting verbose
+    snmplib.verbose = options.verbose
+
+    if len(args) < 2:
+        cmd_error('too few parameters.\n')
+    else:
+        return args
+
+if __name__ == '__main__':
+    try:
+        args = opt_parse()
+        items = snmplib.lld_process(args[0], args[1], SNMPV, RULE)
+        print snmplib.lld_format(items)
+    except Exception:
+        proc_error()
