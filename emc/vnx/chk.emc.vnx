@@ -1,7 +1,9 @@
 #!/bin/bash
 #
 # 1.0.2 Notes:
-# tuning filter(grep, sed, awk) expression
+# add sps lld check
+# add sps cable lld check
+# add bbu lld check
 #
 # 1.0.1 Notes:
 # add naviseccli -np option to reduce exec time
@@ -45,22 +47,21 @@ cat << EOF
 
     version: $VERSION
     usage:
-        $PROGNAME hostname spa              -- state of SP A
-        $PROGNAME hostname spb              -- state of SP B
-        $PROGNAME hostname cpua             -- state of the CPU module on SP A
-        $PROGNAME hostname cpub             -- state of the CPU module on SP B
-        $PROGNAME hostname dimma            -- state of the DIMM module on SP A
-        $PROGNAME hostname dimmb            -- state of the DIMM module on SP B
-        $PROGNAME hostname spsa             -- state of SPS A
-        $PROGNAME hostname spsb             -- state of SPS B
-        $PROGNAME hostname cablingspsa      -- status of cabling on SPS A
-        $PROGNAME hostname cablingspsb      -- status of cabling on SPS B
-        $PROGNAME hostname io id            -- status of I/O Module: SP_Module
-        $PROGNAME hostname lcc id           -- status of LCC: Bus_Enclosure_SP
-        $PROGNAME hostname fan id           -- status of FAN: Bus_Enclosure_SP
-        $PROGNAME hostname spepower id      -- status of SPE Power: A0 B0 A1 B1
-        $PROGNAME hostname encpower id      -- status of Enclosure Power: Bus_Enclosure_SP
-        $PROGNAME hostname disk id          -- status of Disk: Bus_Enclosure_Disk
+        $PROGNAME hostname spa              -- status of SP A
+        $PROGNAME hostname spb              -- status of SP B
+        $PROGNAME hostname cpua             -- status of CPU module on SP A
+        $PROGNAME hostname cpub             -- status of CPU module on SP B
+        $PROGNAME hostname dimma            -- status of DIMM module on SP A
+        $PROGNAME hostname dimmb            -- status of DIMM module on SP B
+        $PROGNAME hostname sps      sp      -- status of SPS
+        $PROGNAME hostname spscable sp      -- status of SPS Cable
+        $PROGNAME hostname bbu      sp      -- status of BBU
+        $PROGNAME hostname io       id      -- status of I/O Module
+        $PROGNAME hostname lcc      id      -- status of LCC
+        $PROGNAME hostname fan      id      -- status of FAN
+        $PROGNAME hostname spepower id      -- status of SPE Power
+        $PROGNAME hostname encpower id      -- status of Enclosure Power
+        $PROGNAME hostname disk     id      -- status of Disk
 
 EOF
 }
@@ -149,27 +150,42 @@ check() {
         valid_comm "$STATE"
     ;;
 
-    "spsa")
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -spsa \
-                        | sed -n "s/.*SPS A State: *\([A-Za-z]*\)/\1/gp")
+    "sps")
+        local SP="$ITEMPARM"
+
+        if [ -z "$SP" ]; then
+            echo "ZBX_NOTSUPPORTED"
+            exit 1
+        fi
+
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+                        | sed -n "s/.*SPS $SP State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
-    "spsb")
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -spsb \
-                        | sed -n "s/.*SPS B State: *\([A-Za-z]*\)/\1/gp")
+    "spscable")
+        local SP="$ITEMPARM"
+
+        if [ -z "$SP" ]; then
+            echo "ZBX_NOTSUPPORTED"
+            exit 1
+        fi
+
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+                        | sed -n "s/.*SPS $SP Cabling State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
-    "cablingspsa")
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -cablingspsa \
-                        | sed -n "s/.*SPS A Cabling State: *\([A-Za-z]*\)/\1/gp")
-        valid_comm "$STATE"
-    ;;
+    "bbu")
+        local SP="$ITEMPARM"
 
-    "cablingspsb")
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -cablingspsb \
-                        | sed -n "s/.*SPS B Cabling State: *\([A-Za-z]*\)/\1/gp")
+        if [ -z "$SP" ]; then
+            echo "ZBX_NOTSUPPORTED"
+            exit 1
+        fi
+
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+                        | sed -n "s/.*BBU $SP State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 

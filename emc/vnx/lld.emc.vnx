@@ -2,8 +2,10 @@
 #
 # 1.0.2 Notes:
 # fix getopts parse bug
-# fix discovery empty disks bug
-# tuning filter(grep, sed, awk) expression
+# fix discovery empty disk bug
+# fix discovery vnx2 fan bug
+# add discovery sps
+# add discovery bbu (vnx2)
 #
 # 1.0.1 Notes:
 # add naviseccli -np option to reduce exec time
@@ -46,12 +48,14 @@ cat << EOF
 
     version: $VERSION
     usage:
-    $PROGNAME hostname io            -- discovery I/O Module: SP_Module
-    $PROGNAME hostname lcc           -- discovery LCC: Bus_Enclosure_SP
-    $PROGNAME hostname fan           -- discovery FAN: Bus_Enclosure_SP
-    $PROGNAME hostname spepower      -- discovery SPE Power: A0 B0 A1 B1
-    $PROGNAME hostname encpower      -- discovery Enclosure Power: Bus_Enclosure_SP
-    $PROGNAME hostname disk          -- discovery Disk: Bus_Enclosure_Disk
+    $PROGNAME hostname sps           -- discovery SPS
+    $PROGNAME hostname bbu           -- discovery BBU
+    $PROGNAME hostname io            -- discovery I/O Module
+    $PROGNAME hostname lcc           -- discovery LCC
+    $PROGNAME hostname fan           -- discovery FAN
+    $PROGNAME hostname spepower      -- discovery SPE Power
+    $PROGNAME hostname encpower      -- discovery Enclosure Power
+    $PROGNAME hostname disk          -- discovery Disk
 
 EOF
 }
@@ -80,6 +84,20 @@ discovery() {
     local ITEMNAME="$2"
 
     case "$ITEMNAME" in
+    "sps")
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+                        | sed -n "s/.*SPS \([AB]\) State:/\1/gp" \
+                        | awk '{print $1}')
+        print "SPNAME" "$LIST"
+    ;;
+
+    "bbu")
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+                        | sed -n "s/.*BBU \([AB]\) State:/\1/gp" \
+                        | awk '{print $1}')
+        print "SPNAME" "$LIST"
+    ;;
+
     "io")
         local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
                         | sed -n "s/.*SP \([AB]\) I\/O Module \([0-9][0-9]*\) State:/\1_\2/gp" \
@@ -96,7 +114,7 @@ discovery() {
 
     "fan")
         local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
-                        | sed -n "s/Bus \([0-9][0-9]*\) Enclosure \([0-9][0-9]*\) Fan \([AB]\) State:/\1_\2_\3/gp" \
+                        | sed -n "s/Bus \([0-9][0-9]*\) Enclosure \([0-9][0-9]*\) Fan \([AB][0-9]*\) State:/\1_\2_\3/gp" \
                         | awk '{print $1}')
         print "FANNAME" "$LIST"
     ;;
