@@ -41,7 +41,7 @@ cat << EOF
 
     version: $VERSION
     usage:
-    $PROGNAME hostname disk          -- discovery Disk: Enclosure_Slot
+    $PROGNAME hostname disk          -- discovery Disk
 
 EOF
 }

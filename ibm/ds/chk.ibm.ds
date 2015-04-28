@@ -43,7 +43,7 @@ cat << EOF
     usage:
         $PROGNAME hostname spa              -- status of Controller A
         $PROGNAME hostname spb              -- status of Controller B
-        $PROGNAME hostname disk id          -- status of Disk: Enclosure_Slot
+        $PROGNAME hostname disk id          -- status of Disk
 
 EOF
 }
