@@ -85,14 +85,14 @@ discovery() {
 
     case "$ITEMNAME" in
     "sps")
-        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
                         | sed -n "s/.*SPS \([AB]\) State:/\1/gp" \
                         | awk '{print $1}')
         print "SPNAME" "$LIST"
     ;;
 
     "bbu")
-        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
                         | sed -n "s/.*BBU \([AB]\) State:/\1/gp" \
                         | awk '{print $1}')
         print "SPNAME" "$LIST"
@@ -106,28 +106,28 @@ discovery() {
     ;;
 
     "lcc")
-        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
                         | sed -n "s/Bus \([0-9][0-9]*\) Enclosure \([0-9][0-9]*\) LCC \([AB]\) State:/\1_\2_\3/gp" \
                         | awk '{print $1}')
         print "LCCNAME" "$LIST"
     ;;
 
     "fan")
-        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
                         | sed -n "s/Bus \([0-9][0-9]*\) Enclosure \([0-9][0-9]*\) Fan \([AB][0-9]*\) State:/\1_\2_\3/gp" \
                         | awk '{print $1}')
         print "FANNAME" "$LIST"
     ;;
 
     "spepower")
-        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
                         | sed -n "s/.*SPE Power \([AB][0-9][0-9]*\) State:/\1/gp" \
                         | awk '{print $1}')
         print "POWERNAME" "$LIST"
     ;;
 
     "encpower")
-        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
                         | sed -n "s/Bus \([0-9][0-9]*\) Enclosure \([0-9][0-9]*\) Power \([AB]\) State:/\1_\2_\3/gp" \
                         | awk '{print $1}')
         print "POWERNAME" "$LIST"
