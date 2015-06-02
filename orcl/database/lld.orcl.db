@@ -41,7 +41,7 @@ LLD_SQL = {
           from v$asm_diskgroup''',
     'dk': '''
         select group_number || '_' || disk_number, path
-        from v$asm_disk'''
+          from v$asm_disk'''
 }
 
 
