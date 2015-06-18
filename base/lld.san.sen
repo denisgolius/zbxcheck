@@ -1,43 +1,19 @@
 #!/usr/local/python/bin/python
 # -*- coding: UTF-8 -*-
-#
-# 2.0.3 Notes:
-# set snmp version
-#
-# 2.0.2 Notes:
-# filter all ethernetCsmacd and gigabitEthernet interface
-#
-# 2.0.1 Notes:
-# distinguish between empty result and exception
-#
-# 2.0.0 Notes:
-# change from bash to python
-#
+
 import sys
 import traceback
 from optparse import OptionParser
 import snmplib
 
-VERSION = '2.0.3'
+VERSION = '1.0.0'
 ERROR = 'ZBX_NOTSUPPORTED'
 SNMPV = 2
 parser = None
 
-# .1.3.6.1.2.1.2.2.1.2 ifDescr
-# .1.3.6.1.2.1.2.2.1.8 ifOperStatus
-# .1.3.6.1.2.1.2.2.1.3 ifType
-#
-# This rule:
-#    filter all interfaces with:
-#        ifOperStatus up(1)
-#        ifType       ethernetCsmacd(6)
-#        ifType       gigabitEthernet(117)
-#    return index and description of these interfaces
-RULE = ('.1.3.6.1.2.1.2.2.1.2',
-        [('.1.3.6.1.2.1.2.2.1.8',
-         lambda x: x == '1'),
-         ('.1.3.6.1.2.1.2.2.1.3',
-         lambda x: x in ('6', '117'))])
+RULE = ('.1.3.6.1.3.94.1.8.1.3',
+        [('.1.3.6.1.3.94.1.8.1.4',
+         lambda x: x != '1')])
 
 
 def cmd_error(message):

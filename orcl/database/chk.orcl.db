@@ -1,9 +1,11 @@
 #!/usr/local/python/bin/python
 # -*- coding: UTF-8 -*-
-
+#
+# 1.0.1 Notes:
+# add data tablespace max size check
+#
 import sys
 import time
-import json
 import re
 import traceback
 from optparse import OptionParser
@@ -23,7 +25,7 @@ CHK_ITEM = {
     'status': (
         'general',
         '''
-        select  case when count(*) > 0 then 1 else 0 end
+        select case when count(*) > 0 then 1 else 0 end
           from v$instance
          where status = \'OPEN\'
            and logins = \'ALLOWED\'
@@ -203,7 +205,7 @@ CHK_ITEM = {
           from dba_tablespaces t,(
                select f.tablespace_name,
                       sum(f.blocks) - nvl(sum(s.used_blocks),0) free_blocks
-               from dba_temp_files f, v$sort_segment s
+                from dba_temp_files f, v$sort_segment s
                where f.tablespace_name = s.tablespace_name(+)
                group by f.tablespace_name) a
          where t.tablespace_name = a.tablespace_name'''),
@@ -212,6 +214,12 @@ CHK_ITEM = {
         '''
         select status
           from dba_tablespaces
+         where tablespace_name = upper(:dtsname)'''),
+    'dtsmax': (
+        'tablespace',
+        '''
+        select sum(greatest(bytes, maxbytes))
+          from dba_data_files
          where tablespace_name = upper(:dtsname)'''),
     'dtstotal': (
         'tablespace',
@@ -244,7 +252,7 @@ CHK_ITEM = {
           from dba_tablespaces t,(
                select f.tablespace_name,
                       sum(f.blocks) - nvl(sum(s.used_blocks),0) free_blocks
-               from dba_temp_files f, v$sort_segment s
+                from dba_temp_files f, v$sort_segment s
                where f.tablespace_name = s.tablespace_name(+)
                  and f.tablespace_name = upper(:ttsname)
                group by f.tablespace_name) a
@@ -303,7 +311,7 @@ CHK_ITEM = {
 }
 
 TYPE_MAP = {
-    #item class: (
+    # item class: (
     #  item params check function,
     #  item params parse function)
     'general': (
@@ -381,6 +389,7 @@ def opt_parse():
         ttotal             -- total bytes of all temp tablespaces
         tfree              -- free bytes of all temp tablespaces
         dtsstatus name     -- status of each data tablespace
+        dtsmax    name     -- max bytes of each data tablespace
         dtstotal  name     -- total bytes of each data tablespace
         dtsfree   name     -- free bytes of each data tablespace
         ttsstatus name     -- status of each temp tablespace

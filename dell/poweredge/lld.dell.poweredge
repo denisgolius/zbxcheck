@@ -1,6 +1,9 @@
 #!/usr/local/python/bin/python
 # -*- coding: UTF-8 -*-
 #
+# 1.0.3 Notes:
+# set snmp version
+#
 # 1.0.2 Notes:
 # add array battery lld
 #
@@ -12,8 +15,9 @@ import traceback
 from optparse import OptionParser
 import snmplib
 
-VERSION = '1.0.1'
+VERSION = '1.0.3'
 ERROR = 'ZBX_NOTSUPPORTED'
+SNMPV = 2
 parser = None
 
 RULES = {
@@ -120,7 +124,7 @@ def opt_parse():
 if __name__ == '__main__':
     try:
         args = opt_parse()
-        items = snmplib.lld_process(args[0], args[1], RULES[args[2]])
+        items = snmplib.lld_process(args[0], args[1], SNMPV, RULES[args[2]])
         print snmplib.lld_format(items)
     except Exception:
         proc_error()
