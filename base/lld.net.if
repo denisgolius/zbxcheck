@@ -1,6 +1,10 @@
 #!/usr/local/python/bin/python
 # -*- coding: UTF-8 -*-
 #
+# 2.0.4 Notes:
+# add "HC" flag if device support ifHCInOctets and ifHCOutOctets
+# note: Windows does not have OID: ifHCInOctets and ifHCOutOctets
+
 # 2.0.3 Notes:
 # set snmp version
 #
@@ -18,7 +22,7 @@ import traceback
 from optparse import OptionParser
 import snmplib
 
-VERSION = '2.0.3'
+VERSION = '2.0.4'
 ERROR = 'ZBX_NOTSUPPORTED'
 SNMPV = 2
 parser = None
@@ -39,6 +43,10 @@ RULE = ('.1.3.6.1.2.1.2.2.1.2',
          ('.1.3.6.1.2.1.2.2.1.3',
          lambda x: x in ('6', '117'))])
 
+# .1.3.6.1.2.1.31.1.1.1.6 ifHCInOctets
+HC_OID = '.1.3.6.1.2.1.31.1.1.1.6'
+HC_KEY = '{#SNMPHC}'
+HC_VAL = 'HC'
 
 def cmd_error(message):
     print ERROR
@@ -75,6 +83,15 @@ if __name__ == '__main__':
     try:
         args = opt_parse()
         items = snmplib.lld_process(args[0], args[1], SNMPV, RULE)
+
+        # please forgive me for call this snmplib lower function
+        hc = snmplib.snmp_query(args[0], args[1], SNMPV, HC_OID)
+        if hc:
+            for item in items:
+                item[HC_KEY] = HC_VAL
+        else:
+            for item in items:
+                item[HC_KEY] = ''
         print snmplib.lld_format(items)
     except Exception:
         proc_error()
