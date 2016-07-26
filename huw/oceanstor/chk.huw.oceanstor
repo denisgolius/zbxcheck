@@ -1,8 +1,6 @@
 #!/usr/local/python/bin/python
 # -*- coding: UTF-8 -*-
-#
-# only support V100RXXXCXX now
-#
+
 import argparse
 import traceback
 import logging
@@ -20,56 +18,66 @@ logger = logging.getLogger(__name__)
 OLD = 'OLD'
 NEW = 'NEW'
 
-
-# repeat maybe is a good idea :)
-def controller_old_proc(args, info):
-    pattern = r'Controller ID\s+\|\s+{}(?:.*\n){{4}}\s*Operation Status\s+\|\s+(\w+)'
-    return re.findall(pattern.format(args), info)[0]
-
-
-def enclosure_old_proc(args, info):
-    pattern = r'{}\s+\w+\s+(\w+).*\n'
-    return re.findall(pattern.format(args), info)[0]
-
-
-def power_old_proc(args, info):
-    pattern = r'{}\s+{}\s+(\w+).*\n'
-    return re.findall(pattern.format(*args), info)[0]
-
-
-def fan_old_proc(args, info):
-    pattern = r'Enclosure ID\s+\|\s+{}.*\n.*Fan ID\s+\|\s+{}.*\n\s*Status\s+\|\s+(\w+)'
-    return re.findall(pattern.format(*args), info)[0]
-
-
-def bbu_old_proc(args, info):
-    pattern = r'Controller ID\s+\|\s+{}.*\n.*BBU ID\s+\|\s+{}.*\n\s*Status\s+\|\s+(\w+)'
-    return re.findall(pattern.format(*args), info)[0]
-
-
-def disk_old_proc(args, info):
-    pattern = r'Disk Location\s+\|\s+\({}\,{}\)(?:.*\n){{10}}\s*Physical Status\s+\|\s+(\w+)'
-    return re.findall(pattern.format(*args), info)[0]
-
-
 CHK_RULES = {
     'controller': {
-        'OLD': ('showcontroller -c {}', controller_old_proc),
+        OLD: (
+            'showcontroller -c {}',
+            r'Controller ID\s+\|\s+{}(?:.*\n){{4}}\s*Operation Status\s+\|\s+(\w+)'
+        ),
+        NEW: (
+            'show controller general controller={}',
+            r'Controller\s+\:\s+{}.*\n\s*Health Status\s+\:\s+(\w+)'
+        )
     },
     'enclosure': {
-        'OLD': ('showenclosure -e {}', enclosure_old_proc),
+        OLD: (
+            'showenclosure -e {}',
+            r'{}\s+\w+\s+(\w+).*\n'
+        ),
+        NEW: (
+            'show enclosure enclosure_id={}',
+            r'ID\s+\:\s+{}(?:.*\n){{2}}\s*Health Status\s+\:\s+(\w+)'
+        )
     },
     'power': {
-        'OLD': ('showpower -e {} -power {}', power_old_proc),
+        OLD: (
+            'showpower -e {} -power {}',
+            r'{}\s+{}\s+(\w+).*\n'
+        ),
+        NEW: (
+            'show power_supply power_supply_id={}',
+            r'ID\s+\:\s+{}.*\n\s*Health Status\s+\:\s+(\w+)'
+        )
     },
     'fan': {
-        'OLD': ('showfan -e {} -f {}', fan_old_proc),
+        OLD: (
+            'showfan -e {} -f {}',
+            r'Enclosure ID\s+\|\s+{}.*\n.*Fan ID\s+\|\s+{}.*\n\s*Status\s+\|\s+(\w+)'
+        ),
+        NEW: (
+            'show fan fan_id={}',
+            r'ID\s+\:\s+{}(?:.*\n){{2}}\s*Health Status\s+\:\s+(\w+)'
+        )
     },
     'bbu': {
-        'OLD': ('showbbu', bbu_old_proc),
+        OLD: (
+            'showbbu',
+            r'Controller ID\s+\|\s+{}.*\n.*BBU ID\s+\|\s+{}.*\n\s*Status\s+\|\s+(\w+)'
+        ),
+        NEW: (
+            'show bbu general bbu_id={}',
+            r'ID\s+\:\s+{}.*\n\s*Health Status\s+\:\s+(\w+)'
+        )
     },
     'disk': {
-        'OLD': ('showdisk -e {} -s {}', disk_old_proc),
+        OLD: (
+            'showdisk -e {} -s {}',
+            r'Disk Location\s+\|\s+\({}\,{}\)(?:.*\n){{10}}\s*Physical Status\s+\|\s+(\w+)'
+        ),
+        NEW: (
+            'show disk general disk_id={}',
+            r'ID\s+\:\s+{}.*\n\s*Health Status\s+\:\s+(\w+)'
+        )
     }
 }
 
@@ -93,15 +101,18 @@ class SSH_SHELL(object):
                             timeout=self.TIMEOUT)
         self.channel = self.client.invoke_shell(width=self.WIDTH_CHAR,
                                                 height=self.HEIGHT_CHAR)
+        self.last_command = 'THIS IS NOT EXIST'
         logger.debug('connect host [%s] success' % hostname)
 
     def send(self, command):
+        self.last_command = command
         self.channel.send(command + '\n')
         logger.debug('send command: %s', command)
 
     def recv(self):
         buff = ''
-        while not buff.endswith(self.CMD_END):
+        while not (buff.endswith(self.CMD_END) or
+                   buff.endswith(self.last_command)):
             buff += self.channel.recv(self.RECV_WINDOW)
             if buff.endswith(self.CMD_MORE):
                 self.channel.send(' ')
@@ -114,7 +125,7 @@ def analyze_name(version, name):
     if version == OLD:
         args = name.split('_')
     else:
-        args = name
+        args = [name]
     logger.debug('analyze name: %s' % args)
     return args
 
@@ -129,32 +140,46 @@ def fill_command(command_template, args):
     return command
 
 
+def info_process(info, pattern, args):
+    if isinstance(args, list):
+        logger.debug('pattern: %s' % pattern.format(*args))
+        result = re.findall(pattern.format(*args), info)[0]
+    else:
+        logger.debug('pattern: %s' % pattern.format(args))
+        result = re.findall(pattern.format(args), info)[0]
+    return result
+
+
 def chk_process(hostname, username, password, component, name):
+    # check component
+    if component not in CHK_RULES.keys():
+        logger.debug('component [%s] is invalid' % component)
+        return ERROR
+
+    # init ssh shell
     shell = SSH_SHELL(hostname, username, password)
 
     # query version
     sys_info = shell.recv()
-    code = re.findall('Product Version\s*[:|]\s*V(\d{3}).*', sys_info)
+    code = re.findall('Product Version\s+[:|]\s+V(\d{3,})R', sys_info)
     if code:
         if code[0] == '100':
             version = OLD
         else:
-            # disable new version support
             version = NEW
-            return ERROR
     else:
         return ERROR
     logger.debug('version is [%s]' % version)
 
     # query single component info
-    (template, process) = CHK_RULES[component][version]
+    (template, pattern) = CHK_RULES[component][version]
     args = analyze_name(version, name)
     command = fill_command(template, args)
     shell.send(command)
     info = shell.recv()
 
     # process single component info
-    return process(args, info)
+    return info_process(info, pattern, args)
 
 
 def main():

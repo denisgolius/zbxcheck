@@ -1,8 +1,6 @@
 #!/usr/local/python/bin/python
 # -*- coding: UTF-8 -*-
-#
-# only support V100RXXXCXX now
-#
+
 import argparse
 import traceback
 import logging
@@ -22,62 +20,66 @@ logger = logging.getLogger(__name__)
 OLD = 'OLD'
 NEW = 'NEW'
 
-
-# repeat maybe is a good idea :)
-def controller_old_proc(info):
-    pattern = r'Controller ID\s+\|\s+(\w+).*\n'
-    for each in re.findall(pattern, info):
-        yield '_'.join(each)
-
-
-def enclosure_old_proc(info):
-    pattern = r'(\d+).*\n'
-    for each in re.findall(pattern, info):
-        yield '_'.join(each)
-
-
-def power_old_proc(info):
-    pattern = r'(\d+)\s+(\w+).*\n'
-    for each in re.findall(pattern, info):
-        yield '_'.join(each)
-
-
-def fan_old_proc(info):
-    pattern = r'Enclosure ID\s+\|\s+(\d+).*\n\s*Fan ID\s+\|\s+(\d+)'
-    for each in re.findall(pattern, info):
-        yield '_'.join(each)
-
-
-def bbu_old_proc(info):
-    pattern = r'Controller ID\s+\|\s+(\w+).*\n\s*BBU ID\s+\|\s+(\d+)'
-    for each in re.findall(pattern, info):
-        yield '_'.join(each)
-
-
-def disk_old_proc(info):
-    pattern = r'\((\d+)\,(\d+)\)'
-    for each in re.findall(pattern, info):
-        yield '_'.join(each)
-
-
 LLD_RULES = {
     'controller': {
-        'OLD': ('showcontroller', controller_old_proc),
+        OLD: (
+            'showcontroller',
+            r'Controller ID\s+\|\s+(\w+).*\n'
+        ),
+        NEW: (
+            'show controller general',
+            r'Controller \s+\:\s+(\w+).*\n'
+        )
     },
     'enclosure': {
-        'OLD': ('showenclosure', enclosure_old_proc),
+        OLD: (
+            'showenclosure',
+            r'(\d+).*\n'
+        ),
+        NEW: (
+            'show enclosure',
+            r'(\w+\d+)\s+.*\n'
+        )
     },
     'power': {
-        'OLD': ('showpower', power_old_proc),
+        OLD: (
+            'showpower',
+            r'(\d+)\s+(\w+).*\n'
+        ),
+        NEW: (
+            'show power_supply',
+            r'(\w+\d+\.\w+\.\w*\d+)\s+.*\n'
+        )
     },
     'fan': {
-        'OLD': ('showfan', fan_old_proc),
+        OLD: (
+            'showfan',
+            r'Enclosure ID\s+\|\s+(\d+).*\n\s*Fan ID\s+\|\s+(\d+)'
+        ),
+        NEW: (
+            'show fan',
+            r'(\w+\d+\.\w+\.\w*\d+)\s+.*\n'
+        )
     },
     'bbu': {
-        'OLD': ('showbbu', bbu_old_proc),
+        OLD: (
+            'showbbu',
+            r'Controller ID\s+\|\s+(\w+).*\n\s*BBU ID\s+\|\s+(\d+)'
+        ),
+        NEW: (
+            'show bbu general',
+            r'(\w+\d+\.\w*\d+)\s+.*\n'
+        )
     },
     'disk': {
-        'OLD': ('showdisk -physic', disk_old_proc),
+        OLD: (
+            'showdisk -physic',
+            r'\((\d+)\,(\d+)\)'
+        ),
+        NEW: (
+            'show disk general',
+            r'(\w+\d+\.\w*\d+)\s+.*\n'
+        )
     }
 }
 
@@ -101,20 +103,31 @@ class SSH_SHELL(object):
                             timeout=self.TIMEOUT)
         self.channel = self.client.invoke_shell(width=self.WIDTH_CHAR,
                                                 height=self.HEIGHT_CHAR)
+        self.last_command = 'THIS IS NOT EXIST'
         logger.debug('connect host [%s] success' % hostname)
 
     def send(self, command):
+        self.last_command = command
         self.channel.send(command + '\n')
         logger.debug('send command: %s', command)
 
     def recv(self):
         buff = ''
-        while not buff.endswith(self.CMD_END):
+        while not (buff.endswith(self.CMD_END) or
+                   buff.endswith(self.last_command)):
             buff += self.channel.recv(self.RECV_WINDOW)
             if buff.endswith(self.CMD_MORE):
                 self.channel.send(' ')
         logger.debug('recevie response: %s', buff)
         return buff
+
+
+def info_process(info, pattern):
+    for items in re.findall(pattern, info):
+        if isinstance(items, str):
+            yield items
+        else:
+            yield '_'.join(items)
 
 
 def lld_format(items, debug):
@@ -127,29 +140,33 @@ def lld_format(items, debug):
 
 
 def lld_process(hostname, username, password, component):
+    # check component
+    if component not in LLD_RULES.keys():
+        logger.debug('component [%s] is invalid' % component)
+        return ERROR
+
+    # init ssh shell
     shell = SSH_SHELL(hostname, username, password)
 
     # query version
     sys_info = shell.recv()
-    code = re.findall('Product Version\s*[:|]\s*V(\d{3}).*', sys_info)
+    code = re.findall('Product Version\s+[:|]\s+V(\d{3,})R', sys_info)
     if code:
         if code[0] == '100':
             version = OLD
         else:
-            # disable new version support
             version = NEW
-            return ERROR
     else:
         return ERROR
     logger.debug('version is [%s]' % version)
 
     # query component info list
-    (command, process) = LLD_RULES[component][version]
+    (command, pattern) = LLD_RULES[component][version]
     shell.send(command)
     info = shell.recv()
 
     # process component info list
-    items = map(lambda x: {'{#NAME}': x}, process(info))
+    items = map(lambda x: {'{#NAME}': x}, info_process(info, pattern))
     return lld_format(items)
 
 
