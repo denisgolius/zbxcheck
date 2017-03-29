@@ -1,5 +1,8 @@
 #!/bin/bash
 #
+# 1.0.3 Notes:
+# add user and password args
+#
 # 1.0.2 Notes:
 # add sps lld check
 # add sps cable lld check
@@ -9,16 +12,13 @@
 # add naviseccli -np option to reduce exec time
 # fix io check bug
 #
-readonly VERSION="1.0.2"
+readonly VERSION="1.0.3"
 readonly PROGNAME=$(basename $0)
 readonly PROGDIR=$(dirname $0)
 readonly ARGS="$@"
 readonly ARGN="$#"
 
-# please change the naviseccli file localtion
-# and add naviseccli user security first (zabbix user)
-# naviseccli -AddUserSecurity -user xxxx -password xxxxx -scope 0
-readonly NAVISECCLI="/opt/Navisphere/bin/naviseccli -secfilepath /home/zabbix"
+readonly NAVISECCLI="/opt/Navisphere/bin/naviseccli"
 
 parse() {
     if [ 0 -eq $ARGN ]; then
@@ -47,21 +47,21 @@ cat << EOF
 
     version: $VERSION
     usage:
-        $PROGNAME hostname spa              -- status of SP A
-        $PROGNAME hostname spb              -- status of SP B
-        $PROGNAME hostname cpua             -- status of CPU module on SP A
-        $PROGNAME hostname cpub             -- status of CPU module on SP B
-        $PROGNAME hostname dimma            -- status of DIMM module on SP A
-        $PROGNAME hostname dimmb            -- status of DIMM module on SP B
-        $PROGNAME hostname sps      sp      -- status of SPS
-        $PROGNAME hostname spscable sp      -- status of SPS Cable
-        $PROGNAME hostname bbu      sp      -- status of BBU
-        $PROGNAME hostname io       id      -- status of I/O Module
-        $PROGNAME hostname lcc      id      -- status of LCC
-        $PROGNAME hostname fan      id      -- status of FAN
-        $PROGNAME hostname spepower id      -- status of SPE Power
-        $PROGNAME hostname encpower id      -- status of Enclosure Power
-        $PROGNAME hostname disk     id      -- status of Disk
+        $PROGNAME hostname username password spa          -- status of SP A
+        $PROGNAME hostname username password spb          -- status of SP B
+        $PROGNAME hostname username password cpua         -- status of CPU module on SP A
+        $PROGNAME hostname username password cpub         -- status of CPU module on SP B
+        $PROGNAME hostname username password dimma        -- status of DIMM module on SP A
+        $PROGNAME hostname username password dimmb        -- status of DIMM module on SP B
+        $PROGNAME hostname username password sps      sp  -- status of SPS
+        $PROGNAME hostname username password spscable sp  -- status of SPS Cable
+        $PROGNAME hostname username password bbu      sp  -- status of BBU
+        $PROGNAME hostname username password io       id  -- status of I/O Module
+        $PROGNAME hostname username password lcc      id  -- status of LCC
+        $PROGNAME hostname username password fan      id  -- status of FAN
+        $PROGNAME hostname username password spepower id  -- status of SPE Power
+        $PROGNAME hostname username password encpower id  -- status of Enclosure Power
+        $PROGNAME hostname username password disk     id  -- status of Disk
 
 EOF
 }
@@ -110,42 +110,56 @@ valid_disk() {
 
 check() {
     local HOSTNAME="$1"
-    local ITEMNAME="$2"
-    local ITEMPARM="$3"
+    local USERNAME="$2"
+    local PASSWORD="$3"
+    local ITEMNAME="$4"
+    local ITEMPARM="$5"
 
     case "$ITEMNAME" in
     "spa")
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -spa \
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus -spa \
                         | sed -n "s/SP A State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
     "spb")
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -spb \
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus -spb \
                         | sed -n "s/SP B State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
     "cpua")
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -cpua \
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus -cpua \
                         | sed -n "s/.*CPU Module A State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
     "cpub")
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -cpub \
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus -cpub \
                         | sed -n "s/.*CPU Module B State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
     "dimma")
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -dimma \
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus -dimma \
                         | sed -n "s/.*DIMM Module A State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
 
     "dimmb")
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -dimmb \
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus -dimmb \
                         | sed -n "s/.*DIMM Module B State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
@@ -158,7 +172,9 @@ check() {
             exit 1
         fi
 
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus \
                         | sed -n "s/.*SPS $SP State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
@@ -171,7 +187,9 @@ check() {
             exit 1
         fi
 
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus \
                         | sed -n "s/.*SPS $SP Cabling State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
@@ -184,7 +202,9 @@ check() {
             exit 1
         fi
 
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus \
                         | sed -n "s/.*BBU $SP State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
@@ -198,7 +218,9 @@ check() {
             exit 1
         fi
 
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus -all \
                         | sed -n "s/.*SP $SP I\/O Module $MODULE State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
@@ -213,7 +235,9 @@ check() {
             exit 1
         fi
 
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus \
                         | sed -n "s/Bus $BUS Enclosure $ENCL LCC $SP State: *\([A-Za-z]*\)/\1/gp")
 
         valid_comm "$STATE"
@@ -229,7 +253,9 @@ check() {
             exit 1
         fi
 
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus \
                         | sed -n "s/Bus $BUS Enclosure $ENCL Fan $SP State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
@@ -242,7 +268,9 @@ check() {
             exit 1
         fi
 
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus \
                         | sed -n "s/.*SPE Power $SPE State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
@@ -257,7 +285,9 @@ check() {
             exit 1
         fi
 
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus \
                         | sed -n "s/Bus $BUS Enclosure $ENCL Power $SP State: *\([A-Za-z]*\)/\1/gp")
         valid_comm "$STATE"
     ;;
@@ -270,7 +300,9 @@ check() {
             exit 1
         fi
 
-        local STATE=$($NAVISECCLI -h "$HOSTNAME" -np getdisk "$DISK" -state \
+        local STATE=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getdisk "$DISK" -state \
                         | sed -n "s/State: *\([A-Za-z]*\)/\1/gp")
         valid_disk "$STATE"
     ;;

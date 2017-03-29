@@ -1,5 +1,8 @@
 #!/bin/bash
 #
+# 1.0.3 Notes:
+# add user and password args
+#
 # 1.0.2 Notes:
 # fix getopts parse bug
 # fix discovery empty disk bug
@@ -10,16 +13,13 @@
 # 1.0.1 Notes:
 # add naviseccli -np option to reduce exec time
 #
-readonly VERSION="1.0.2"
+readonly VERSION="1.0.3"
 readonly PROGNAME=$(basename $0)
 readonly PROGDIR=$(dirname $0)
 readonly ARGS="$@"
 readonly ARGN="$#"
 
-# please change the naviseccli file localtion
-# and add naviseccli user security first (zabbix user)
-# naviseccli -AddUserSecurity -user xxxx -password xxxxx -scope 0
-readonly NAVISECCLI="/opt/Navisphere/bin/naviseccli -secfilepath /home/zabbix"
+readonly NAVISECCLI="/opt/Navisphere/bin/naviseccli"
 
 parse() {
     if [ 0 -eq $ARGN ]; then
@@ -48,14 +48,14 @@ cat << EOF
 
     version: $VERSION
     usage:
-    $PROGNAME hostname sps           -- discovery SPS
-    $PROGNAME hostname bbu           -- discovery BBU
-    $PROGNAME hostname io            -- discovery I/O Module
-    $PROGNAME hostname lcc           -- discovery LCC
-    $PROGNAME hostname fan           -- discovery FAN
-    $PROGNAME hostname spepower      -- discovery SPE Power
-    $PROGNAME hostname encpower      -- discovery Enclosure Power
-    $PROGNAME hostname disk          -- discovery Disk
+    $PROGNAME hostname username password sps       -- discovery SPS
+    $PROGNAME hostname username password bbu       -- discovery BBU
+    $PROGNAME hostname username password io        -- discovery I/O Module
+    $PROGNAME hostname username password lcc       -- discovery LCC
+    $PROGNAME hostname username password fan       -- discovery FAN
+    $PROGNAME hostname username password spepower  -- discovery SPE Power
+    $PROGNAME hostname username password encpower  -- discovery Enclosure Power
+    $PROGNAME hostname username password disk      -- discovery Disk
 
 EOF
 }
@@ -81,60 +81,78 @@ print() {
 
 discovery() {
     local HOSTNAME="$1"
-    local ITEMNAME="$2"
+    local USERNAME="$2"
+    local PASSWORD="$3"
+    local ITEMNAME="$4"
 
     case "$ITEMNAME" in
     "sps")
-        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus \
                         | sed -n "s/.*SPS \([AB]\) State:/\1/gp" \
                         | awk '{print $1}')
         print "SPNAME" "$LIST"
     ;;
 
     "bbu")
-        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus \
                         | sed -n "s/.*BBU \([AB]\) State:/\1/gp" \
                         | awk '{print $1}')
         print "SPNAME" "$LIST"
     ;;
 
     "io")
-        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus -all \
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus -all \
                         | sed -n "s/.*SP \([AB]\) I\/O Module \([0-9][0-9]*\) State:/\1_\2/gp" \
                         | awk '$2 !~ /[Ee]mpty/ {print $1}')
         print "IONAME" "$LIST"
     ;;
 
     "lcc")
-        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus \
                         | sed -n "s/Bus \([0-9][0-9]*\) Enclosure \([0-9][0-9]*\) LCC \([AB]\) State:/\1_\2_\3/gp" \
                         | awk '{print $1}')
         print "LCCNAME" "$LIST"
     ;;
 
     "fan")
-        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus \
                         | sed -n "s/Bus \([0-9][0-9]*\) Enclosure \([0-9][0-9]*\) Fan \([AB][0-9]*\) State:/\1_\2_\3/gp" \
                         | awk '{print $1}')
         print "FANNAME" "$LIST"
     ;;
 
     "spepower")
-        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus \
                         | sed -n "s/.*SPE Power \([AB][0-9][0-9]*\) State:/\1/gp" \
                         | awk '{print $1}')
         print "POWERNAME" "$LIST"
     ;;
 
     "encpower")
-        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getcrus \
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getcrus \
                         | sed -n "s/Bus \([0-9][0-9]*\) Enclosure \([0-9][0-9]*\) Power \([AB]\) State:/\1_\2_\3/gp" \
                         | awk '{print $1}')
         print "POWERNAME" "$LIST"
     ;;
 
     "disk")
-        local LIST=$($NAVISECCLI -h "$HOSTNAME" -np getdisk -state \
+        local LIST=$($NAVISECCLI -h "$HOSTNAME" \
+                        -User "$USERNAME" -Password "$PASSWORD" -Scope 0 \
+                        -np getdisk -state \
                         | grep -e "Disk" -e "State" \
                         | sed -n "N;s/^Bus \([0-9][0-9]*\) Enclosure \([0-9][0-9]*\) *Disk \([0-9][0-9]*\)\nState:/\1_\2_\3/gp" \
                         | awk '$2 !~ /[Ee]mpty/ {print $1}')
