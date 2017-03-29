@@ -4,11 +4,11 @@
 import sys
 import time
 import json
+import socket
 import traceback
 from optparse import OptionParser
-import cx_Oracle
 
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 ERROR = 'ZBX_NOTSUPPORTED'
 parser = None
 verbose = False
@@ -17,6 +17,12 @@ verbose = False
 # Ref: db_user.sql for detail.
 USERNAME = 'raidmirror'  # oracle username
 PASSWORD = 'raidmirror'  # oralce password
+
+# mcdb server parameters
+MCDB_HOST = '127.0.0.1'
+MCDB_PORT = 10061
+MCDB_CODE = 'ORCL'
+BUFFER_SIZE = 1024 * 8
 
 LLD_SQL = {
     # component name: lld sql
@@ -63,6 +69,22 @@ def proc_error():
     sys.exit(1)
 
 
+def client(request):
+    # send request to mcdb
+    address = (MCDB_HOST, MCDB_PORT)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect(address)
+    log('connect mcdb server success')
+    try:
+        sock.sendall(request)
+        log('send request success')
+        response = sock.recv(BUFFER_SIZE)
+        log('receive response success: %s' % response)
+        return response.strip()
+    finally:
+        sock.close()
+
+
 def opt_parse():
     global verbose
     global parser
@@ -88,7 +110,7 @@ def opt_parse():
 
     if len(args) < 4:
         cmd_error('too few parameters.\n')
-    elif args[3] not in LLD_SQL.keys():
+    elif args[3] not in LLD_SQL:
         cmd_error('component is invalidate.\n')
     else:
         return args
@@ -104,28 +126,56 @@ def lld_format(items):
 
 
 def lld_process(hostname, port, sid, component):
+    # mcdb server request protocal:
+    # format as json
+    # {
+    #     "code": "ORCL",
+    #     "host": "xxx",
+    #     "port": "xxx",
+    #     "name": "xxx",
+    #     "user": "xxx",
+    #     "pswd": "xxx",
+    #     "sql": "xxx",
+    #     "args": [xxx] -> optional
+    # }
+    query = {
+        'code': MCDB_CODE,
+        'host': hostname,
+        'port': port,
+        'name': sid,
+        'user': USERNAME,
+        'pswd': PASSWORD,
+        'sql': LLD_SQL[component]
+    }
+    request = json.dumps(query)
+    payload = client(request)
+    response = json.loads(payload)
+
+    # mcdb response protocal:
+    # format as json
+    # {
+    #     "code": "xxx",
+    #     "data": "xxx"
+    # }
+    # code 0000 - success
+    # code 0001 - request format is invalid
+    # code 0002 - request key is required
+    # code 0003 - request database is unsupported
+    # code 0004 - database connection error
+    # code 0005 - database execution error
+    # code 00FF - encountered an unknown error
     items = []
-
-    dsn = cx_Oracle.makedsn(hostname, port, sid)
-    log('using dns: %s' % dsn)
-
-    conn = cx_Oracle.connect(USERNAME, PASSWORD, dsn)
-    log('connect to %s success.' % sid)
-
-    cursor = conn.cursor()
-    cursor.execute(LLD_SQL[component])
-    log('execute sql success.')
-
-    for row in cursor:
-        item = {}
-        item['{#INDEX}'] = row[0]
-        item['{#NAME}'] = row[1]
-        items.append(item)
-        log('get item: %s' % item)
-
-    cursor.close()
-    conn.close()
-
+    code = response['code']
+    data = response['data']
+    if code == '0000':
+        log('query success with data [%s]' % data)
+        for row in data:
+            item = {}
+            item['{#INDEX}'] = row[0]
+            item['{#NAME}'] = row[1]
+            items.append(item)
+    else:
+        log('query failed with code [%s]' % code)
     return items
 
 if __name__ == '__main__':

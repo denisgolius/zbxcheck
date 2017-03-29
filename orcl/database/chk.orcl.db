@@ -6,12 +6,13 @@
 #
 import sys
 import time
+import json
 import re
+import socket
 import traceback
 from optparse import OptionParser
-import cx_Oracle
 
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 ERROR = 'ZBX_NOTSUPPORTED'
 verbose = False
 parser = None
@@ -20,6 +21,12 @@ parser = None
 # Ref: db_user.sql for detail.
 USERNAME = 'raidmirror'  # oracle username
 PASSWORD = 'raidmirror'  # oralce password
+
+# mcdb server info
+MCDB_HOST = '127.0.0.1'
+MCDB_PORT = 10061
+MCDB_CODE = 'ORCL'
+BUFFER_SIZE = 1024 * 8
 
 CHK_ITEM = {
     'status': (
@@ -34,15 +41,13 @@ CHK_ITEM = {
         'general',
         '''
         select count(*)-1
-          from v$session
-         where username is not null'''),
+          from v$session'''),
     'ausers': (
         'general',
         '''
         select count(*)-1
           from v$session
-         where username is not null
-           and status=\'ACTIVE\''''),
+         where status=\'ACTIVE\''''),
     'commits': (
         'general',
         '''
@@ -352,6 +357,22 @@ def proc_error():
     sys.exit(1)
 
 
+def client(request):
+    # send request to mcdb
+    address = (MCDB_HOST, MCDB_PORT)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect(address)
+    log('connect mcdb server success')
+    try:
+        sock.sendall(request)
+        log('send request success')
+        response = sock.recv(BUFFER_SIZE)
+        log('receive response success: %s' % response)
+        return response.strip()
+    finally:
+        sock.close()
+
+
 def opt_parse():
     global verbose
     global parser
@@ -436,35 +457,66 @@ def chk_process(hostname, port, sid, item, params):
         item_params = parse_func(params)
     log('using item parameters: %s' % item_params)
 
-    dsn = cx_Oracle.makedsn(hostname, port, sid)
-    log('using dns: %s' % dsn)
+    # params like asm disk id need parse
+    if parse_func is not None:
+        item_params = parse_func(params)
+    else:
+        item_params = params
 
-    try:
-        conn = cx_Oracle.connect(USERNAME, PASSWORD, dsn)
-        log('connect to %s success.' % sid)
+    # mcdb server request protocal:
+    # format as json
+    # {
+    #     "code": "ORCL",
+    #     "host": "xxx",
+    #     "port": "xxx",
+    #     "name": "xxx",
+    #     "user": "xxx",
+    #     "pswd": "xxx",
+    #     "sql": "xxx",
+    #     "args": [xxx] -> optional
+    # }
+    query = {
+        'code': MCDB_CODE,
+        'host': hostname,
+        'port': port,
+        'name': sid,
+        'user': USERNAME,
+        'pswd': PASSWORD,
+        'sql': item_sql,
+        'args': item_params
+    }
+    request = json.dumps(query)
+    payload = client(request)
+    response = json.loads(payload)
 
-        cursor = conn.cursor()
-        cursor.execute(item_sql, item_params)
-        log('execute sql success.')
-
-        row = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
-
-        # if no row retrieved :
-        # normal sql will return None
-        # aggregate sql will return (None,)
-        if row is None or row[0] is None:
-            log('no row retrieved.')
-            proc_error()
+    # mcdb response protocal:
+    # format as json
+    # {
+    #     "code": "xxx",
+    #     "data": "xxx"
+    # }
+    # code 0000 - success
+    # code 0001 - request format is invalid
+    # code 0002 - request key is required
+    # code 0003 - request database is unsupported
+    # code 0004 - database connection error
+    # code 0005 - database execution error
+    # code 00FF - encountered an unknown error
+    code = response['code']
+    data = response['data']
+    if code == '0000':
+        log('query success with data [%s]' % data)
+        if len(data) > 0 and len(data[0]) > 0:
+            return data[0][0]
         else:
-            return row[0]
-    except Exception:
-        # ensure instance status check always feedback
-        if item == 'status':
-            log('can not get instance status, set to error.')
-            log(traceback.format_exc())
+            log('no data retrieved.')
+            raise
+    else:
+        log('query failed with code [%s]' % code)
+        # instance status check:
+        # 0 down
+        # 1 up
+        if item == 'status' and code in ('0004', '0005'):
             return 0
         else:
             raise
