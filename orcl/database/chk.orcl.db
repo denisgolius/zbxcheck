@@ -463,18 +463,8 @@ def chk_process(hostname, port, sid, item, params):
     else:
         item_params = params
 
-    # mcdb server request protocal:
-    # format as json
-    # {
-    #     "code": "ORCL",
-    #     "host": "xxx",
-    #     "port": "xxx",
-    #     "name": "xxx",
-    #     "user": "xxx",
-    #     "pswd": "xxx",
-    #     "sql": "xxx",
-    #     "args": [xxx] -> optional
-    # }
+    # mcdb request protocal:
+    # https://github.com/zyongqing/mcdb
     query = {
         'code': MCDB_CODE,
         'host': hostname,
@@ -490,18 +480,7 @@ def chk_process(hostname, port, sid, item, params):
     response = json.loads(payload)
 
     # mcdb response protocal:
-    # format as json
-    # {
-    #     "code": "xxx",
-    #     "data": "xxx"
-    # }
-    # code 0000 - success
-    # code 0001 - request format is invalid
-    # code 0002 - request key is required
-    # code 0003 - request database is unsupported
-    # code 0004 - database connection error
-    # code 0005 - database execution error
-    # code 00FF - encountered an unknown error
+    # https://github.com/zyongqing/mcdb
     code = response['code']
     data = response['data']
     if code == '0000':

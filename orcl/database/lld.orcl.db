@@ -126,18 +126,8 @@ def lld_format(items):
 
 
 def lld_process(hostname, port, sid, component):
-    # mcdb server request protocal:
-    # format as json
-    # {
-    #     "code": "ORCL",
-    #     "host": "xxx",
-    #     "port": "xxx",
-    #     "name": "xxx",
-    #     "user": "xxx",
-    #     "pswd": "xxx",
-    #     "sql": "xxx",
-    #     "args": [xxx] -> optional
-    # }
+    # mcdb request protocal:
+    # https://github.com/zyongqing/mcdb
     query = {
         'code': MCDB_CODE,
         'host': hostname,
@@ -151,19 +141,8 @@ def lld_process(hostname, port, sid, component):
     payload = client(request)
     response = json.loads(payload)
 
-    # mcdb response protocal:
-    # format as json
-    # {
-    #     "code": "xxx",
-    #     "data": "xxx"
-    # }
-    # code 0000 - success
-    # code 0001 - request format is invalid
-    # code 0002 - request key is required
-    # code 0003 - request database is unsupported
-    # code 0004 - database connection error
-    # code 0005 - database execution error
-    # code 00FF - encountered an unknown error
+    # mcdb request protocal:
+    # https://github.com/zyongqing/mcdb
     items = []
     code = response['code']
     data = response['data']
