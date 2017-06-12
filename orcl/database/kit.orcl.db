@@ -1,0 +1,53 @@
+#!/usr/local/python/bin/python
+# -*- coding: UTF-8 -*-
+#
+# author: zyongqing@gmail.com
+# create: 2017/05/31
+
+import argparse
+import sys
+import logging
+import cx_Oracle
+
+VERSION = '1.0.0'
+
+USERNAME = 'raidmirror'  # oracle username
+PASSWORD = 'raidmirror'  # oralce password
+
+SQL = 'select status from v$instance'
+
+LOG_FORMAT = '%(levelname)s\t%(asctime)s\t%(message)s'
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+log = logging.getLogger(__name__)
+
+
+def run():
+    parser = argparse.ArgumentParser(description='oracle kit script')
+    parser.add_argument(dest='hostname', help='oracle hostname')
+    parser.add_argument(dest='database', help='oracle database')
+    parser.add_argument('--port', dest='port', type=int, help='oracle port',
+                        default=1521)
+    parser.add_argument('--username', dest='username', help='oracle username',
+                        default=USERNAME)
+    parser.add_argument('--password', dest='password', help='oracle password',
+                        default=PASSWORD)
+    args = parser.parse_args()
+
+    dsn = cx_Oracle.makedsn(args.hostname, args.port, args.database)
+    conn = cx_Oracle.connect(args.username, args.password, dsn)
+    log.info('--> connect check pass.')
+
+    cursor = conn.cursor()
+    cursor.execute(SQL)
+    log.info('--> execute check pass.')
+
+    cursor.close()
+    conn.close()
+    log.info('success :)')
+
+if __name__ == '__main__':
+    try:
+        run()
+    except Exception as e:
+        log.info('failed :( : %s' % e)
+        sys.exit(1)
